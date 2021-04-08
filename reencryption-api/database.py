@@ -65,4 +65,4 @@ def initialisation_data_base():
         IsMessage boolean)""")
 
 
-c.close()
+#c.close()
