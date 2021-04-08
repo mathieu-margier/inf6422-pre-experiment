@@ -1,6 +1,8 @@
 import time
 import random
 import statistics
+import sqlite3
+from . import db_functions
 from flask import Flask, Blueprint, request, abort, json
 from umbral import pre, keys, config, signing, kfrags, cfrags
 
@@ -12,12 +14,23 @@ config.set_default_curve()
 # Statistics of durations (in second) for each PRE endpoint
 time_stats_endpoints = {
     "genkey": [],
+    "genuser": [],
+    "getallkeys": [],
     "encrypt": [],
     "gen_renc_key": [],
     "re_encrypt": [],
     "decrypt": [],
     "decrypt_reenc": []
 }
+
+
+
+# Database init
+conn = sqlite3.connect('social_network.db')
+c = conn.cursor()
+db_functions.initialisation_data_base(c)
+conn.commit()
+conn.close()
 
 # Proxy Rencryption endpoints
 @api.route("/genkey", methods=["GET"])
@@ -30,6 +43,70 @@ def genkey():
     time_stats_endpoints["genkey"].append(end - start)
 
     return {"status": "ok", "privateKey": private_key.to_bytes().hex(), "publicKey": public_key.to_bytes().hex()}
+
+@api.route("/genuser", methods=["POST"])    
+def genuser(): 
+	if request.content_type.lower() != "application/json":
+		abort(415)
+
+	data = request.get_json()
+	
+	if "username" in data:
+		try:
+			start = time.perf_counter()
+			conn = sqlite3.connect('social_network.db')
+			c = conn.cursor()
+			testExistence = db_functions.show_element(c, "users", "FirstName", data["username"])
+			if(testExistence != None):
+				print("Utilisateur deja present")
+				conn.close()
+				return {"status": "error", "error": "Nom d utilisateur deja utilisé"}
+				
+			else:
+				print("Ajout de l utilisateur")
+				private_key = keys.UmbralPrivateKey.gen_key()
+				public_key = private_key.get_pubkey()
+				db_functions.add_user(c, data["username"], private_key.to_bytes().hex(), public_key.to_bytes().hex())
+				conn.commit()
+				conn.close()
+				end = time.perf_counter()
+				time_stats_endpoints["genuser"].append(end - start)
+				return {"status": "ok"}
+				
+		except Exception as e:
+			print(e)
+			return {"status": "error", "error": str(e)}
+
+	abort(400)
+    
+@api.route("/getallkeys", methods=["POST"])
+def getallkeys(): 
+	if request.content_type.lower() != "application/json":
+		abort(415)
+
+	data = request.get_json()
+
+	if "username" in data:
+		try:
+			start = time.perf_counter()
+			conn = sqlite3.connect('social_network.db')
+			c = conn.cursor()
+			user = db_functions.show_element(c, "users", "FirstName", data["username"])
+			print("utilisateur:")
+			print(user)
+			private_key = user[2]
+			public_key = user[1]
+			print("privée:")
+			print(private_key)
+			conn.close()
+			end = time.perf_counter()
+			time_stats_endpoints["getallkeys"].append(end - start)
+			return {"status": "ok", "privateKey": private_key, "publicKey": public_key}
+		except Exception as e:
+			print(e)
+			return {"status": "error", "error": str(e)}
+	
+	abort(400)
 
 @api.route("/encrypt", methods=["POST"])
 def encrypt():
@@ -205,3 +282,6 @@ def time_stats(endpoint):
         }
     else:
         return {"status": "error", "error": "Wrong endpoint '{}', shoud be one of {}".format(endpoint, list(time_stats_endpoints))}
+
+
+
