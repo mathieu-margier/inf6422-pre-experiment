@@ -2,7 +2,7 @@ import time
 import random
 import statistics
 import sqlite3
-from . import db_functions
+from . import database
 from flask import Flask, Blueprint, request, abort, json
 from umbral import pre, keys, config, signing, kfrags, cfrags
 
@@ -28,7 +28,7 @@ time_stats_endpoints = {
 # Database init
 conn = sqlite3.connect('social_network.db')
 c = conn.cursor()
-db_functions.initialisation_data_base(c)
+database.initialisation_data_base(c)
 conn.commit()
 conn.close()
 
@@ -56,7 +56,7 @@ def genuser():
 			start = time.perf_counter()
 			conn = sqlite3.connect('social_network.db')
 			c = conn.cursor()
-			testExistence = db_functions.show_element(c, "users", "FirstName", data["username"])
+			testExistence = database.show_element(c, "users", "FirstName", data["username"])
 			if(testExistence != None):
 				print("Utilisateur deja present")
 				conn.close()
@@ -66,7 +66,7 @@ def genuser():
 				print("Ajout de l utilisateur")
 				private_key = keys.UmbralPrivateKey.gen_key()
 				public_key = private_key.get_pubkey()
-				db_functions.add_user(c, data["username"], private_key.to_bytes().hex(), public_key.to_bytes().hex())
+				database.add_user(c, data["username"], private_key.to_bytes().hex(), public_key.to_bytes().hex())
 				conn.commit()
 				conn.close()
 				end = time.perf_counter()
@@ -91,7 +91,7 @@ def getallkeys():
 			start = time.perf_counter()
 			conn = sqlite3.connect('social_network.db')
 			c = conn.cursor()
-			user = db_functions.show_element(c, "users", "FirstName", data["username"])
+			user = database.show_element(c, "users", "FirstName", data["username"])
 			print("utilisateur:")
 			print(user)
 			private_key = user[2]
