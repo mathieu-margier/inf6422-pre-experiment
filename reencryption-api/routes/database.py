@@ -1,4 +1,7 @@
 # Fonctions pour la db
+import sqlite3
+
+
 def add_user(c, name, private_key, public_key):
     query = "insert into users (FirstName,Public_key,Private_key) values (?, ?, ?)"
     c.execute(query, (name, public_key, private_key))
@@ -27,8 +30,11 @@ def show_element(c, table, colomn, condition):
 
 def initialisation_data_base(c):
     ## Dropping Tables
-    c.execute("""DROP TABLE users""")
-    c.execute("""DROP TABLE message""")
+    try:
+        c.execute("""DROP TABLE users""")
+        c.execute("""DROP TABLE message""")
+    except sqlite3.OperationalError:
+        pass
 
     ## Creating Tables
     c.execute("""CREATE TABLE users (
