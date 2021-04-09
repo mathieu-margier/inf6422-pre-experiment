@@ -3,57 +3,81 @@ import requests
 SERVER_ADDRESS = "127.0.0.1:5000"
 URL = "http://" + SERVER_ADDRESS + "/api/"
 
-def connexion():
-	response = requests.get(URL + "genkey")
-	assert response.status_code == 200
-	data = response.json()
-	assert data["status"] == "ok"
-	alices_private_key = data["privateKey"]
-	alices_public_key = data["publicKey"]
-	
-def inscription():
-	response = requests.get(URL + "getallkeys")
-	assert response.status_code == 200
-	data = response.json()
-	assert data["status"] == "ok"
-	alices_private_key = data["privateKey"]
-	alices_public_key = data["publicKey"]
-
-# Connexion
-choice = 3
+# Clés de l'utilisateur
 private_key = ''
 public_key = ''
-while(choice != '1'):
+
+# Fonctions pour le menu principal
+def connexion():
+	username = input('Nom d\'utilisateur : ')
+	## Récupération des clés, attention à ne pas mettre un nom qui n'existe pas pour l'instant
+	response = requests.post(
+		URL + "getallkeys",
+		json={"username": username}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] == "ok"):
+		private_key = data["privateKey"]
+		public_key = data["publicKey"]
+		print(private_key)
+		print(public_key)
+		return True
+	else:
+		print(data["error"])
+		return False
+	
+def inscription():
+	username = input('Nom d\'utilisateur : ')
+	response = requests.post(
+		URL + "genuser",
+		json={"username": username}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] == "ok"):
+		print("Bienvenue " + username)
+		return True
+	else:
+		print(data["error"])
+		return False
+
+# Fonctions d'envoi et de réception de messages
+
+def envoiContenuIndividuel():
+	print("envoi de message individuel")
+	choixEnvoi = input('A qui voulez-vous envoyer ce message\nChoix : ')
+
+def envoiContenuCollectif():
+	print("envoi de message collectif")
+
+def receptionContenu():
+	print("réception de contenu")
+
+# Connexion ou inscription
+choice = 0
+validation = False
+
+while(choice != '1' or not validation):
 	choice = input('1 - Se connecter\n2 - Creer nouvel utilisateur\nChoix : ')
 
 	if(choice == '1'):
-		username = input('Nom d\'utilisateur : ')
-		## Récupération des clés, attention à ne pas mettre un nom qui n'existe pas pour l'instant
-		response = requests.post(
-			URL + "getallkeys",
-			json={"username": username}
-		)
-		assert response.status_code == 200
-		data = response.json()
-		if(data["status"] == "ok"):
-			private_key = data["privateKey"]
-			public_key = data["publicKey"]
-			print(private_key)
-			print(public_key)
-		else:
-			print(data["error"])
+		validation = connexion()
 	if(choice == '2'):
-		username = input('Nom d\'utilisateur : ')
-		response = requests.post(
-			URL + "genuser",
-			json={"username": username}
-		)
-		assert response.status_code == 200
-		data = response.json()
-		if(data["status"] == "ok"):
-			print("Bienvenue " + username)
-		else:
-			print(data["error"])
+		validation = inscription()
+		
+# Menu utilisateur connecté		
+
+while(choice != '4'):
+	choice = input('1 - Partager du contenu à une personne\n2 - Partager du contenu à un groupe\n3 - Recevoir le contenu qui m\'est destiné\n4 - Quitter\nChoix : ')
+
+	if(choice == '1'):
+		validation = envoiContenuIndividuel()
+	if(choice == '2'):
+		validation = envoiContenuCollectif()
+	if(choice == '3'):
+		validation = receptionContenu()
+
 
 
 # 1. Generate Alice keys

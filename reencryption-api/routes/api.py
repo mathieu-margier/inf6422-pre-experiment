@@ -92,12 +92,12 @@ def getallkeys():
 			conn = sqlite3.connect('social_network.db')
 			c = conn.cursor()
 			user = database.show_element(c, "users", "FirstName", data["username"])
-			print("utilisateur:")
-			print(user)
+			if(user == None):
+				print("L\'utilisateur n\'existe pas")
+				conn.close()
+				return {"status": "error", "error": "L\'utilisateur n\'existe pas"}
 			private_key = user[2]
 			public_key = user[1]
-			print("privée:")
-			print(private_key)
 			conn.close()
 			end = time.perf_counter()
 			time_stats_endpoints["getallkeys"].append(end - start)
