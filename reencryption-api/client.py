@@ -6,13 +6,15 @@ URL = "http://" + SERVER_ADDRESS + "/api/"
 # Clés de l'utilisateur
 private_key = ''
 public_key = ''
+signing_key = ''
+verifying_key = ''
 
 # Fonctions pour le menu principal
 def connexion():
 	username = input('Nom d\'utilisateur : ')
 	## Récupération des clés, attention à ne pas mettre un nom qui n'existe pas pour l'instant
 	response = requests.post(
-		URL + "getallkeys",
+		URL + "keygenerator/getallkeys",
 		json={"username": username}
 	)
 	assert response.status_code == 200
@@ -20,8 +22,12 @@ def connexion():
 	if(data["status"] == "ok"):
 		private_key = data["privateKey"]
 		public_key = data["publicKey"]
+		signing_key = data["signingKey"]
+		verifying_key = data["verifyingKey"]
 		print(private_key)
 		print(public_key)
+		print(signing_key)
+		print(verifying_key)
 		return True
 	else:
 		print(data["error"])
@@ -30,7 +36,7 @@ def connexion():
 def inscription():
 	username = input('Nom d\'utilisateur : ')
 	response = requests.post(
-		URL + "genuser",
+		URL + "socialnetwork/genuser",
 		json={"username": username}
 	)
 	assert response.status_code == 200

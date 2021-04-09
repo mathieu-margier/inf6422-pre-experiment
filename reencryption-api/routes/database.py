@@ -1,7 +1,7 @@
 # Fonctions pour la db
-def add_user(c, name, private_key, public_key):
-    query = "insert into users (FirstName,Public_key,Private_key) values (?, ?, ?)"
-    c.execute(query, (name, public_key, private_key))
+def add_user(c, name, private_key, public_key, signing_key, verifying_key):
+    query = "insert into users (FirstName,Public_key,Private_key,Verifying_key,Signing_key) values (?, ?, ?, ?, ?)"
+    c.execute(query, (name, public_key, private_key, verifying_key, signing_key))
 
 
 def add_message(c, sender, reciever, link, is_message):
@@ -34,7 +34,9 @@ def initialisation_data_base(c):
     c.execute("""CREATE TABLE users (
         FirstName varchar(255),
         Public_key varchar (255),
-        Private_key varchar (255))""")
+        Private_key varchar (255),
+        Verifying_key varchar (255),
+        Signing_key varchar (255))""")
 
     c.execute("""CREATE TABLE message (
         Sender varchar(255),

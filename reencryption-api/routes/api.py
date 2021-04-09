@@ -32,7 +32,7 @@ database.initialisation_data_base(c)
 conn.commit()
 conn.close()
 
-# Proxy Rencryption endpoints
+
 @api.route("/genkey", methods=["GET"])
 def genkey():
     start = time.perf_counter()
@@ -44,7 +44,8 @@ def genkey():
 
     return {"status": "ok", "privateKey": private_key.to_bytes().hex(), "publicKey": public_key.to_bytes().hex()}
 
-@api.route("/genuser", methods=["POST"])    
+# Social network endpoints (réalisés par le réseau social)
+@api.route("socialnetwork/genuser", methods=["POST"])    
 def genuser(): 
 	if request.content_type.lower() != "application/json":
 		abort(415)
@@ -66,7 +67,9 @@ def genuser():
 				print("Ajout de l utilisateur")
 				private_key = keys.UmbralPrivateKey.gen_key()
 				public_key = private_key.get_pubkey()
-				database.add_user(c, data["username"], private_key.to_bytes().hex(), public_key.to_bytes().hex())
+				signing_key = keys.UmbralPrivateKey.gen_key()
+				verifying_key = signing_key.get_pubkey()
+				database.add_user(c, data["username"], private_key.to_bytes().hex(), public_key.to_bytes().hex(), signing_key.to_bytes().hex(), verifying_key.to_bytes().hex())
 				conn.commit()
 				conn.close()
 				end = time.perf_counter()
@@ -78,8 +81,9 @@ def genuser():
 			return {"status": "error", "error": str(e)}
 
 	abort(400)
-    
-@api.route("/getallkeys", methods=["POST"])
+
+# Key generator endpoints (réalisés par le générateur de clé)
+@api.route("keygenerator/getallkeys", methods=["POST"])
 def getallkeys(): 
 	if request.content_type.lower() != "application/json":
 		abort(415)
@@ -98,16 +102,19 @@ def getallkeys():
 				return {"status": "error", "error": "L\'utilisateur n\'existe pas"}
 			private_key = user[2]
 			public_key = user[1]
+			signing_key = user[4]
+			verifying_key = user[3]
 			conn.close()
 			end = time.perf_counter()
 			time_stats_endpoints["getallkeys"].append(end - start)
-			return {"status": "ok", "privateKey": private_key, "publicKey": public_key}
+			return {"status": "ok", "privateKey": private_key, "publicKey": public_key, "signingKey": signing_key, "verifyingKey": verifying_key}
 		except Exception as e:
 			print(e)
 			return {"status": "error", "error": str(e)}
 	
 	abort(400)
 
+# Client tasks endpoints (réalisé sur le client)
 @api.route("/encrypt", methods=["POST"])
 def encrypt():
     if request.content_type.lower() != "application/json":
@@ -156,39 +163,6 @@ def gen_rencryption_key():
             time_stats_endpoints["gen_renc_key"].append(end - start)
 
             return {"status": "ok", "reencKey": kfrag.to_bytes().hex()}
-        except Exception as e:
-            return {"status": "error", "error": str(e)}
-
-    abort(400)
-
-@api.route("/re_encrypt", methods=["POST"])
-def re_encrypt():
-    if request.content_type.lower() != "application/json":
-        abort(415)
-
-    data = request.get_json()
-
-    if ("delegatorPublicKey" in data and "delegatorVerifyingKey" in data
-        and "receiverPublicKey" in data and "capsule" in data
-        and "reencKey" in data):
-        try:
-            start = time.perf_counter()
-            delegatorPubKey = keys.UmbralPublicKey.from_hex(data["delegatorPublicKey"])
-            delegatorVerifKey = keys.UmbralPublicKey.from_hex(data["delegatorVerifyingKey"])
-            receiverPublicKey = keys.UmbralPublicKey.from_hex(data["receiverPublicKey"])
-            reencKey = kfrags.KFrag.from_bytes(bytes.fromhex(data["reencKey"]))
-            capsule = pre.Capsule.from_bytes(bytes.fromhex(data["capsule"]), config.default_params())
-
-            capsule.set_correctness_keys(delegating=delegatorPubKey,
-                                             receiving=receiverPublicKey,
-                                             verifying=delegatorVerifKey)
-
-            cfrag = pre.reencrypt(kfrag=reencKey, capsule=capsule)
-            end = time.perf_counter()
-
-            time_stats_endpoints["re_encrypt"].append(end - start)
-
-            return {"status": "ok", "cfrag": cfrag.to_bytes().hex()}
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
@@ -257,6 +231,42 @@ def decrypt_reenc():
             return {"status": "error", "error": str(e)}
 
     abort(400)
+
+# Proxy re-encryption endpoints (réalisés par le proxy)
+@api.route("/re_encrypt", methods=["POST"])
+def re_encrypt():
+    if request.content_type.lower() != "application/json":
+        abort(415)
+
+    data = request.get_json()
+
+    if ("delegatorPublicKey" in data and "delegatorVerifyingKey" in data
+        and "receiverPublicKey" in data and "capsule" in data
+        and "reencKey" in data):
+        try:
+            start = time.perf_counter()
+            delegatorPubKey = keys.UmbralPublicKey.from_hex(data["delegatorPublicKey"])
+            delegatorVerifKey = keys.UmbralPublicKey.from_hex(data["delegatorVerifyingKey"])
+            receiverPublicKey = keys.UmbralPublicKey.from_hex(data["receiverPublicKey"])
+            reencKey = kfrags.KFrag.from_bytes(bytes.fromhex(data["reencKey"]))
+            capsule = pre.Capsule.from_bytes(bytes.fromhex(data["capsule"]), config.default_params())
+
+            capsule.set_correctness_keys(delegating=delegatorPubKey,
+                                             receiving=receiverPublicKey,
+                                             verifying=delegatorVerifKey)
+
+            cfrag = pre.reencrypt(kfrag=reencKey, capsule=capsule)
+            end = time.perf_counter()
+
+            time_stats_endpoints["re_encrypt"].append(end - start)
+
+            return {"status": "ok", "cfrag": cfrag.to_bytes().hex()}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    abort(400)
+
+
 
 # Stats endpoints
 
