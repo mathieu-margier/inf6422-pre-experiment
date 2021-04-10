@@ -20,10 +20,13 @@ time_stats_endpoints = {
     "gen_renc_key": [],
     "re_encrypt": [],
     "decrypt": [],
-    "decrypt_reenc": []
+    "decrypt_reenc": [],
+    "send_message": []
 }
 
+# Counter to find messages
 
+message_counter = 0
 
 # Database init
 conn = sqlite3.connect('social_network.db')
@@ -82,6 +85,64 @@ def genuser():
 
 	abort(400)
 
+@api.route("socialnetwork/sendmessage", methods=["POST"])    
+def send_message(): 
+    if request.content_type.lower() != "application/json":
+        abort(415)
+
+    data = request.get_json()
+    
+    if "sender" in data and "link" in data and "capsule" in data:
+        try:
+            print("Ajout du message")
+            start = time.perf_counter()
+            conn = sqlite3.connect('social_network.db')
+            c = conn.cursor()
+
+            global message_counter
+            message_counter += 1
+            database.add_message(c, message_counter, data["sender"], data["link"], True, data["capsule"])
+            database.show_table(c, "message")
+            conn.commit()
+            conn.close()
+            end = time.perf_counter()
+            time_stats_endpoints["send_message"].append(end - start)
+            return {"status": "ok"}
+                
+        except Exception as e:
+            print(e)
+            return {"status": "error", "error": str(e)}
+
+    abort(400)
+
+@api.route("socialnetwork/checkuserexistence", methods=["POST"])
+def checkuserexistence(): 
+    if request.content_type.lower() != "application/json":
+        abort(415)
+
+    data = request.get_json()
+
+    if "usernames" in data:
+        try:
+            # start = time.perf_counter()
+            conn = sqlite3.connect('social_network.db')
+            c = conn.cursor()
+            for username in data["usernames"]:
+                user = database.show_element(c, "users", "FirstName", username)
+                if(user == None):
+                    print("L\'utilisateur n\'existe pas")
+                    conn.close()
+                    return {"status": "error", "error": "Un des utilisateurs n\'existe pas"}
+                conn.close()
+            # end = time.perf_counter()
+            # time_stats_endpoints["getallkeys"].append(end - start)
+            return {"status": "ok"}
+        except Exception as e:
+            print(e)
+            return {"status": "error", "error": str(e)}
+    
+    abort(400)
+
 # Key generator endpoints (réalisés par le générateur de clé)
 @api.route("keygenerator/getallkeys", methods=["POST"])
 def getallkeys(): 
@@ -115,7 +176,7 @@ def getallkeys():
 	abort(400)
 
 # Client tasks endpoints (réalisé sur le client)
-@api.route("/encrypt", methods=["POST"])
+@api.route("client/encrypt", methods=["POST"])
 def encrypt():
     if request.content_type.lower() != "application/json":
         abort(415)

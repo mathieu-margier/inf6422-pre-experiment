@@ -3,6 +3,8 @@ import requests
 SERVER_ADDRESS = "127.0.0.1:5000"
 URL = "http://" + SERVER_ADDRESS + "/api/"
 
+username = ''
+
 # Clés de l'utilisateur
 private_key = ''
 public_key = ''
@@ -11,11 +13,11 @@ verifying_key = ''
 
 # Fonctions pour le menu principal
 def connexion():
-	username = input('Nom d\'utilisateur : ')
-	## Récupération des clés, attention à ne pas mettre un nom qui n'existe pas pour l'instant
+	user = input('Nom d\'utilisateur : ')
+	## Récupération des clés
 	response = requests.post(
 		URL + "keygenerator/getallkeys",
-		json={"username": username}
+		json={"username": user}
 	)
 	assert response.status_code == 200
 	data = response.json()
@@ -24,14 +26,11 @@ def connexion():
 		public_key = data["publicKey"]
 		signing_key = data["signingKey"]
 		verifying_key = data["verifyingKey"]
-		print(private_key)
-		print(public_key)
-		print(signing_key)
-		print(verifying_key)
-		return True
+		username = user
+		return True, private_key, public_key, signing_key, verifying_key, user
 	else:
 		print(data["error"])
-		return False
+		return False, '', '', '', '', ''
 	
 def inscription():
 	username = input('Nom d\'utilisateur : ')
@@ -52,7 +51,48 @@ def inscription():
 
 def envoiContenuIndividuel():
 	print("envoi de message individuel")
+
+	# Choix du destinataire
 	choixEnvoi = input('A qui voulez-vous envoyer ce message\nChoix : ')
+	response = requests.post(
+		URL + "socialnetwork/checkuserexistence",
+		json={"usernames": [choixEnvoi]}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+
+	# Message et chiffrement
+	message = input('Veuillez entrer votre message\nMessage : ')
+	response = requests.post(
+		URL + "client/encrypt",
+		json={"publicKey": public_key, "plaintext": message}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+	ciphertext = data["ciphertext"]
+	capsule = data["capsule"]
+	print("ciphertext: {}".format(ciphertext))
+	print("alice's encrypted message: {}".format(capsule))
+
+	# Envoi du message chiffré et de la capsule
+	response = requests.post(
+		URL + "socialnetwork/sendmessage",
+		json={"sender": username, "link": ciphertext, "capsule": capsule}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+
+	return True
+
 
 def envoiContenuCollectif():
 	print("envoi de message collectif")
@@ -68,12 +108,11 @@ while(choice != '1' or not validation):
 	choice = input('1 - Se connecter\n2 - Creer nouvel utilisateur\nChoix : ')
 
 	if(choice == '1'):
-		validation = connexion()
+		validation, private_key, public_key, signing_key, verifying_key, username = connexion()
 	if(choice == '2'):
 		validation = inscription()
 		
 # Menu utilisateur connecté		
-
 while(choice != '4'):
 	choice = input('1 - Partager du contenu à une personne\n2 - Partager du contenu à un groupe\n3 - Recevoir le contenu qui m\'est destiné\n4 - Quitter\nChoix : ')
 
