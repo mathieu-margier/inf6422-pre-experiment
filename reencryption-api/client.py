@@ -124,10 +124,59 @@ def envoiContenuIndividuel():
 
 
 def envoiContenuCollectif():
-	print("envoi de message collectif")
+		print("envoi de message collectif")
 
 def receptionContenu():
 	print("réception de contenu")
+	# Récupération du contenu de Bob
+	response = requests.post(
+		URL + "socialnetwork/getcontent",
+		json={"username": username}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+
+	messages = data["contents"]
+	# # Re-encryption des messages
+	# response = requests.post(
+	# 	URL + "proxy/re_encrypt",
+	# 	json={"delegatorPublicKey": public_key,
+	# 		"delegatorVerifyingKey": alices_verifying_key,
+	# 		"receiverPublicKey": bobs_public_key,
+	# 		"reencKey": alice_to_bob_rencryption_key,
+	# 		"capsule": alice_capsule}
+	# )
+	# assert response.status_code == 200
+	# data = response.json()
+	# assert data["status"] == "ok"
+	# bob_cfrag = data["cfrag"]
+	# print()
+	# print("Bob's encrypted capsule fragment: {}".format(bob_cfrag))
+
+	# # 5. Finally, bob decryption
+	# response = requests.post(
+	# 	URL + "decrypt_reenc",
+	# 	json={ # Decryption parameters
+	# 		"receiverPrivateKey": bobs_private_key,
+	# 		"ciphertext": ciphertext,
+	# 		"capsule": alice_capsule,
+	# 		# Re-encryption additional parameters
+	# 		"receiverPublicKey": bobs_public_key,
+	# 		"delegatorPublicKey": public_key,
+	# 		"delegatorVerifyingKey": alices_verifying_key,
+	# 		"cfrag": bob_cfrag}
+	# )
+	# #print("Request: {}".format(response.text))
+	# assert response.status_code == 200
+	# data = response.json()
+	# assert data["status"] == "ok"
+	# assert data["plaintext"] == plaintext
+
+	# print("Bob successfuly decrypted Alice's re-encrypted message!")
+	# print("Original message: {}".format(data["plaintext"]))
 
 # Connexion ou inscription
 choice = 0

@@ -19,9 +19,13 @@ def show_table(c, table):
 
 def show_element(c, table, colomn, condition):
     query = """select * from """ + table + """ where """ + colomn + """=\'""" + condition +"""\' """
-    print(query)
     c.execute(query)
     return c.fetchone()
+
+def get_content(c, username):
+    query = "select * from message where Number IN (select MessageNumber from proxy where Receiver = ?)"
+    c.execute(query, (username,))
+    return c.fetchall()
 
     ##INITIALISATION DES TABLES
 

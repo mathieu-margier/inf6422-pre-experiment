@@ -144,6 +144,30 @@ def send_message():
 
     abort(400)
 
+@api.route("socialnetwork/getcontent", methods=["POST"])
+def get_content(): 
+    if request.content_type.lower() != "application/json":
+        abort(415)
+
+    data = request.get_json()
+
+    if "username" in data:
+        try:
+            start = time.perf_counter()
+            conn = sqlite3.connect('social_network.db')
+            c = conn.cursor()
+            contents = database.get_content(c, data["username"])
+            print(contents)
+            conn.close()
+            end = time.perf_counter()
+            time_stats_endpoints["getpublickey"].append(end - start)
+            return {"status": "ok", "contents": contents}
+        except Exception as e:
+            print(e)
+            return {"status": "error", "error": str(e)}
+
+    abort(400)
+
 @api.route("socialnetwork/checkuserexistence", methods=["POST"])
 def checkuserexistence(): 
     if request.content_type.lower() != "application/json":
