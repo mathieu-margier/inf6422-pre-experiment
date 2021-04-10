@@ -16,6 +16,7 @@ time_stats_endpoints = {
     "genkey": [],
     "genuser": [],
     "getallkeys": [],
+    "getpublickey": [],
     "encrypt": [],
     "gen_renc_key": [],
     "re_encrypt": [],
@@ -85,6 +86,34 @@ def genuser():
 
 	abort(400)
 
+@api.route("socialnetwork/getpublickey", methods=["POST"])
+def get_public_key(): 
+	if request.content_type.lower() != "application/json":
+		abort(415)
+
+	data = request.get_json()
+
+	if "username" in data:
+		try:
+			start = time.perf_counter()
+			conn = sqlite3.connect('social_network.db')
+			c = conn.cursor()
+			user = database.show_element(c, "users", "FirstName", data["username"])
+			if(user == None):
+				print("L\'utilisateur n\'existe pas")
+				conn.close()
+				return {"status": "error", "error": "L\'utilisateur n\'existe pas"}
+			public_key = user[1]
+			conn.close()
+			end = time.perf_counter()
+			time_stats_endpoints["getpublickey"].append(end - start)
+			return {"status": "ok", "publicKey": public_key}
+		except Exception as e:
+			print(e)
+			return {"status": "error", "error": str(e)}
+	
+	abort(400)
+
 @api.route("socialnetwork/sendmessage", methods=["POST"])    
 def send_message(): 
     if request.content_type.lower() != "application/json":
@@ -107,7 +136,7 @@ def send_message():
             conn.close()
             end = time.perf_counter()
             time_stats_endpoints["send_message"].append(end - start)
-            return {"status": "ok"}
+            return {"status": "ok", "messageNumber": message_counter}
                 
         except Exception as e:
             print(e)
@@ -199,14 +228,14 @@ def encrypt():
 
     abort(400)
 
-@api.route("/gen_renc_key", methods=["POST"])
+@api.route("client/gen_renc_key", methods=["POST"])
 def gen_rencryption_key():
     if request.content_type.lower() != "application/json":
         abort(415)
 
     data = request.get_json()
 
-    if "delegatorPrivateKey" in data and "delegatorSigningKey" in data and "receiverPublicKey" in data:
+    if "delegatorPrivateKey" in data and "delegatorSigningKey" in data and "receiverPublicKey" in data and "receiverUsername" in data and "messageNumber" in data:
         try:
             start = time.perf_counter()
             delegatorPrivKey = keys.UmbralPrivateKey.from_bytes(bytes.fromhex(data["delegatorPrivateKey"]))
@@ -219,11 +248,16 @@ def gen_rencryption_key():
                                          receiving_pubkey=receiverPublicKey,
                                          threshold=1,
                                          N=1)
+            conn = sqlite3.connect('social_network.db')
+            c = conn.cursor()
+            database.add_reenc_key(c, data["messageNumber"], data["receiverUsername"], kfrag.to_bytes().hex())
+            conn.commit()
             end = time.perf_counter()
 
             time_stats_endpoints["gen_renc_key"].append(end - start)
-
-            return {"status": "ok", "reencKey": kfrag.to_bytes().hex()}
+            database.show_table(c, "proxy")
+            conn.close()
+            return {"status": "ok"}
         except Exception as e:
             return {"status": "error", "error": str(e)}
 

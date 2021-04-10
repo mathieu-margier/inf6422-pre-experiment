@@ -3,11 +3,13 @@ def add_user(c, name, private_key, public_key, signing_key, verifying_key):
     query = "insert into users (FirstName,Public_key,Private_key,Verifying_key,Signing_key) values (?, ?, ?, ?, ?)"
     c.execute(query, (name, public_key, private_key, verifying_key, signing_key))
 
-
 def add_message(c, number, sender, link, is_message, capsule):
     query = "insert into message (Number, Sender, Link, IsMessage, Capsule) values (?, ?, ?, ?, ?)"
     c.execute(query, (number, sender, link, is_message, capsule))
 
+def add_reenc_key(c, message_number, receiver, reenc_key):
+    query = "insert into proxy (MessageNumber, Receiver, ReencKey) values (?, ?, ?)"
+    c.execute(query, (message_number, receiver, reenc_key))
 
 def show_table(c, table):
     query = """select * from """ + table
@@ -47,8 +49,7 @@ def initialisation_data_base(c):
 
     c.execute("""CREATE TABLE proxy (
         MessageNumber int,
-        Reveiver varchar(255),
-        CipherCEK varchar (255),
+        Receiver varchar(255),
         ReencKey varchar (255))""")
 
 

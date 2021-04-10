@@ -90,6 +90,35 @@ def envoiContenuIndividuel():
 	if(data["status"] != "ok"):
 		print(data["error"])
 		return False
+	message_number = data["messageNumber"]
+
+	# Récupération clé publique du destinataire
+	response = requests.post(
+		URL + "socialnetwork/getpublickey",
+		json={"username": choixEnvoi}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+	receiver_public_key = data["publicKey"]
+
+	# Génération de la re-encryption key
+	response = requests.post(
+		URL + "client/gen_renc_key",
+		json={"delegatorPrivateKey": private_key,
+			"delegatorSigningKey": signing_key,
+			"receiverPublicKey": receiver_public_key,
+			"receiverUsername": choixEnvoi,
+			"messageNumber": message_number}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+	print("Re-encryption key from alice to bob generated")
 
 	return True
 
