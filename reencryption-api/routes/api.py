@@ -86,33 +86,34 @@ def genuser():
 
 	abort(400)
 
-@api.route("socialnetwork/getpublickey", methods=["POST"])
+@api.route("socialnetwork/getpublickeys", methods=["POST"])
 def get_public_key(): 
-	if request.content_type.lower() != "application/json":
-		abort(415)
+    if request.content_type.lower() != "application/json":
+        abort(415)
 
-	data = request.get_json()
+    data = request.get_json()
 
-	if "username" in data:
-		try:
-			start = time.perf_counter()
-			conn = sqlite3.connect('social_network.db')
-			c = conn.cursor()
-			user = database.show_element(c, "users", "FirstName", data["username"])
-			if(user == None):
-				print("L\'utilisateur n\'existe pas")
-				conn.close()
-				return {"status": "error", "error": "L\'utilisateur n\'existe pas"}
-			public_key = user[1]
-			conn.close()
-			end = time.perf_counter()
-			time_stats_endpoints["getpublickey"].append(end - start)
-			return {"status": "ok", "publicKey": public_key}
-		except Exception as e:
-			print(e)
-			return {"status": "error", "error": str(e)}
-	
-	abort(400)
+    if "username" in data:
+        try:
+            start = time.perf_counter()
+            conn = sqlite3.connect('social_network.db')
+            c = conn.cursor()
+            user = database.show_element(c, "users", "FirstName", data["username"])
+            if(user == None):
+                print("L\'utilisateur n\'existe pas")
+                conn.close()
+                return {"status": "error", "error": "L\'utilisateur n\'existe pas"}
+            public_key = user[1]
+            verifying_key = user[3]
+            conn.close()
+            end = time.perf_counter()
+            time_stats_endpoints["getpublickey"].append(end - start)
+            return {"status": "ok", "publicKey": public_key, "verifyingKey": verifying_key}
+        except Exception as e:
+            print(e)
+            return {"status": "error", "error": str(e)}
+    
+    abort(400)
 
 @api.route("socialnetwork/sendmessage", methods=["POST"])    
 def send_message(): 
@@ -196,6 +197,8 @@ def checkuserexistence():
     
     abort(400)
 
+
+
 # Key generator endpoints (réalisés par le générateur de clé)
 @api.route("keygenerator/getallkeys", methods=["POST"])
 def getallkeys(): 
@@ -227,6 +230,8 @@ def getallkeys():
 			return {"status": "error", "error": str(e)}
 	
 	abort(400)
+
+
 
 # Client tasks endpoints (réalisé sur le client)
 @api.route("client/encrypt", methods=["POST"])
@@ -351,8 +356,10 @@ def decrypt_reenc():
 
     abort(400)
 
+
+
 # Proxy re-encryption endpoints (réalisés par le proxy)
-@api.route("/re_encrypt", methods=["POST"])
+@api.route("proxy/re_encrypt", methods=["POST"])
 def re_encrypt():
     if request.content_type.lower() != "application/json":
         abort(415)
@@ -361,18 +368,24 @@ def re_encrypt():
 
     if ("delegatorPublicKey" in data and "delegatorVerifyingKey" in data
         and "receiverPublicKey" in data and "capsule" in data
-        and "reencKey" in data):
+        and "messageNumber" in data and "receiver" in data):
         try:
             start = time.perf_counter()
+            # Récupération de la clé de ré-encryption
+            conn = sqlite3.connect('social_network.db')
+            c = conn.cursor()
+            reenc_key_line = database.get_proxy_line(c, data["messageNumber"], data["receiver"])
+            print(reenc_key_line[2])
+            conn.close()
             delegatorPubKey = keys.UmbralPublicKey.from_hex(data["delegatorPublicKey"])
             delegatorVerifKey = keys.UmbralPublicKey.from_hex(data["delegatorVerifyingKey"])
             receiverPublicKey = keys.UmbralPublicKey.from_hex(data["receiverPublicKey"])
-            reencKey = kfrags.KFrag.from_bytes(bytes.fromhex(data["reencKey"]))
+            reencKey = kfrags.KFrag.from_bytes(bytes.fromhex(reenc_key_line[2]))
             capsule = pre.Capsule.from_bytes(bytes.fromhex(data["capsule"]), config.default_params())
 
             capsule.set_correctness_keys(delegating=delegatorPubKey,
-                                             receiving=receiverPublicKey,
-                                             verifying=delegatorVerifKey)
+                                                receiving=receiverPublicKey,
+                                                verifying=delegatorVerifKey)
 
             cfrag = pre.reencrypt(kfrag=reencKey, capsule=capsule)
             end = time.perf_counter()

@@ -26,7 +26,6 @@ def connexion():
 		public_key = data["publicKey"]
 		signing_key = data["signingKey"]
 		verifying_key = data["verifyingKey"]
-		username = user
 		return True, private_key, public_key, signing_key, verifying_key, user
 	else:
 		print(data["error"])
@@ -94,7 +93,7 @@ def envoiContenuIndividuel():
 
 	# Récupération clé publique du destinataire
 	response = requests.post(
-		URL + "socialnetwork/getpublickey",
+		URL + "socialnetwork/getpublickeys",
 		json={"username": choixEnvoi}
 	)
 	assert response.status_code == 200
@@ -122,9 +121,9 @@ def envoiContenuIndividuel():
 
 	return True
 
-
 def envoiContenuCollectif():
-		print("envoi de message collectif")
+	print("envoi de message collectif")
+	return True
 
 def receptionContenu():
 	print("réception de contenu")
@@ -140,43 +139,69 @@ def receptionContenu():
 		return False
 
 	messages = data["contents"]
-	# # Re-encryption des messages
-	# response = requests.post(
-	# 	URL + "proxy/re_encrypt",
-	# 	json={"delegatorPublicKey": public_key,
-	# 		"delegatorVerifyingKey": alices_verifying_key,
-	# 		"receiverPublicKey": bobs_public_key,
-	# 		"reencKey": alice_to_bob_rencryption_key,
-	# 		"capsule": alice_capsule}
-	# )
-	# assert response.status_code == 200
-	# data = response.json()
-	# assert data["status"] == "ok"
-	# bob_cfrag = data["cfrag"]
-	# print()
-	# print("Bob's encrypted capsule fragment: {}".format(bob_cfrag))
 
-	# # 5. Finally, bob decryption
-	# response = requests.post(
-	# 	URL + "decrypt_reenc",
-	# 	json={ # Decryption parameters
-	# 		"receiverPrivateKey": bobs_private_key,
-	# 		"ciphertext": ciphertext,
-	# 		"capsule": alice_capsule,
-	# 		# Re-encryption additional parameters
-	# 		"receiverPublicKey": bobs_public_key,
-	# 		"delegatorPublicKey": public_key,
-	# 		"delegatorVerifyingKey": alices_verifying_key,
-	# 		"cfrag": bob_cfrag}
-	# )
-	# #print("Request: {}".format(response.text))
-	# assert response.status_code == 200
-	# data = response.json()
-	# assert data["status"] == "ok"
-	# assert data["plaintext"] == plaintext
 
-	# print("Bob successfuly decrypted Alice's re-encrypted message!")
-	# print("Original message: {}".format(data["plaintext"]))
+	# Re-encryption des messages
+	for message in messages:
+		message_number = message[0]
+		message_sender = message[1]
+		message_content = message[2]
+		message_capsule = message[4]
+
+		# Récupération clé publique du destinataire
+		response = requests.post(
+			URL + "socialnetwork/getpublickeys",
+			json={"username": message_sender}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if(data["status"] != "ok"):
+			print(data["error"])
+			return False
+		sender_public_key = data["publicKey"]
+		sender_verifying_key = data["verifyingKey"]
+
+		# Re-encryption du message
+		response = requests.post(
+			URL + "proxy/re_encrypt",
+			json={"delegatorPublicKey": sender_public_key,
+				"delegatorVerifyingKey": sender_verifying_key,
+				"receiverPublicKey": public_key,
+				"capsule": message_capsule,
+				"messageNumber": message_number,
+				"receiver": username}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if(data["status"] != "ok"):
+			print(data["error"])
+			return False
+		receiver_cfrag = data["cfrag"]
+		print()
+		print("Bob's encrypted capsule fragment: {}".format(receiver_cfrag))
+
+		# Déchiffrement du receveur
+		response = requests.post(
+			URL + "decrypt_reenc",
+			json={ # Decryption parameters
+				"receiverPrivateKey": private_key,
+				"ciphertext": message_content,
+				"capsule": message_capsule,
+				# Re-encryption additional parameters
+				"receiverPublicKey": public_key,
+				"delegatorPublicKey": sender_public_key,
+				"delegatorVerifyingKey": sender_verifying_key,
+				"cfrag": receiver_cfrag}
+		)
+		#print("Request: {}".format(response.text))
+		assert response.status_code == 200
+		data = response.json()
+		if(data["status"] != "ok"):
+			print(data["error"])
+			return False
+		print("plaintext : ")
+		print(data["plaintext"])
+		print("Bob successfuly decrypted Alice's re-encrypted message!")
 
 # Connexion ou inscription
 choice = 0
@@ -202,117 +227,112 @@ while(choice != '4'):
 		validation = receptionContenu()
 
 
+# ## Signing / verifying keypair
+# response = requests.get(URL + "genkey")
+# assert response.status_code == 200
+# data = response.json()
+# assert data["status"] == "ok"
+# alices_signing_key = data["privateKey"]
+# alices_verifying_key = data["publicKey"]
 
-# 1. Generate Alice keys
+# # 2. Generate Bob keys
 
+# ## Private / public keypair
+# response = requests.get(URL + "genkey")
+# assert response.status_code == 200
+# data = response.json()
+# assert data["status"] == "ok"
+# bobs_private_key = data["privateKey"]
+# bobs_public_key = data["publicKey"]
 
+# # 3. Encrypt plaintext for Alice
 
-## Signing / verifying keypair
-response = requests.get(URL + "genkey")
-assert response.status_code == 200
-data = response.json()
-assert data["status"] == "ok"
-alices_signing_key = data["privateKey"]
-alices_verifying_key = data["publicKey"]
+# plaintext = 'Proxy Re-encryption is cool!'
+# print("plaintext: {}".format(plaintext))
+# response = requests.post(
+#     URL + 'encrypt',
+#     json={"publicKey": public_key, "plaintext": plaintext}
+# )
+# #print("Request: {}".format(response.text))
+# assert response.status_code == 200
+# data = response.json()
+# assert data["status"] == "ok"
+# ciphertext = data["ciphertext"]
+# alice_capsule = data["capsule"]
 
-# 2. Generate Bob keys
+# print("ciphertext: {}".format(ciphertext))
+# print("alice's encrypted message: {}".format(alice_capsule))
+# print()
 
-## Private / public keypair
-response = requests.get(URL + "genkey")
-assert response.status_code == 200
-data = response.json()
-assert data["status"] == "ok"
-bobs_private_key = data["privateKey"]
-bobs_public_key = data["publicKey"]
+# # 4. Test alice's decryption
+# response = requests.post(
+#     URL + "decrypt",
+#     json={"receiverPrivateKey": private_key, "ciphertext": ciphertext, "capsule": alice_capsule}
+# )
+# assert response.status_code == 200
+# data = response.json()
+# assert data["status"] == "ok"
+# assert data["plaintext"] == plaintext
+# print("Alice successfuly decrypt her message!")
 
-# 3. Encrypt plaintext for Alice
+# # 5. Test bob's decryption (should fail)
+# response = requests.post(
+#     URL + "decrypt",
+#     json={"receiverPrivateKey": bobs_private_key, "ciphertext": ciphertext, "capsule": alice_capsule}
+# )
+# assert response.status_code == 200
+# data = response.json()
+# assert data["status"] == "error"
+# print("Bob could not decrypt Alice's message!")
+# print()
 
-plaintext = 'Proxy Re-encryption is cool!'
-print("plaintext: {}".format(plaintext))
-response = requests.post(
-    URL + 'encrypt',
-    json={"publicKey": public_key, "plaintext": plaintext}
-)
-#print("Request: {}".format(response.text))
-assert response.status_code == 200
-data = response.json()
-assert data["status"] == "ok"
-ciphertext = data["ciphertext"]
-alice_capsule = data["capsule"]
+# # 6. Generate re-encryption key
+# response = requests.post(
+#     URL + "gen_renc_key",
+#     json={"delegatorPrivateKey": private_key,
+#           "delegatorSigningKey": alices_signing_key,
+#           "receiverPublicKey": bobs_public_key}
+# )
+# assert response.status_code == 200
+# data = response.json()
+# assert data["status"] == "ok"
+# alice_to_bob_rencryption_key = data["reencKey"]
+# print("Re-encryption key from alice to bob generated")
 
-print("ciphertext: {}".format(ciphertext))
-print("alice's encrypted message: {}".format(alice_capsule))
-print()
+# # 7. Re-encrypt message
+# response = requests.post(
+#     URL + "re_encrypt",
+#     json={"delegatorPublicKey": public_key,
+#           "delegatorVerifyingKey": alices_verifying_key,
+#           "receiverPublicKey": bobs_public_key,
+#           "reencKey": alice_to_bob_rencryption_key,
+#           "capsule": alice_capsule}
+# )
+# assert response.status_code == 200
+# data = response.json()
+# assert data["status"] == "ok"
+# bob_cfrag = data["cfrag"]
+# print()
+# print("Bob's encrypted capsule fragment: {}".format(bob_cfrag))
 
-# 4. Test alice's decryption
-response = requests.post(
-    URL + "decrypt",
-    json={"receiverPrivateKey": private_key, "ciphertext": ciphertext, "capsule": alice_capsule}
-)
-assert response.status_code == 200
-data = response.json()
-assert data["status"] == "ok"
-assert data["plaintext"] == plaintext
-print("Alice successfuly decrypt her message!")
+# # 5. Finally, bob decryption
+# response = requests.post(
+#     URL + "decrypt_reenc",
+#     json={ # Decryption parameters
+#           "receiverPrivateKey": bobs_private_key,
+#           "ciphertext": ciphertext,
+#           "capsule": alice_capsule,
+#           # Re-encryption additional parameters
+#           "receiverPublicKey": bobs_public_key,
+#           "delegatorPublicKey": public_key,
+#           "delegatorVerifyingKey": alices_verifying_key,
+#           "cfrag": bob_cfrag}
+# )
+# #print("Request: {}".format(response.text))
+# assert response.status_code == 200
+# data = response.json()
+# assert data["status"] == "ok"
+# assert data["plaintext"] == plaintext
 
-# 5. Test bob's decryption (should fail)
-response = requests.post(
-    URL + "decrypt",
-    json={"receiverPrivateKey": bobs_private_key, "ciphertext": ciphertext, "capsule": alice_capsule}
-)
-assert response.status_code == 200
-data = response.json()
-assert data["status"] == "error"
-print("Bob could not decrypt Alice's message!")
-print()
-
-# 6. Generate re-encryption key
-response = requests.post(
-    URL + "gen_renc_key",
-    json={"delegatorPrivateKey": private_key,
-          "delegatorSigningKey": alices_signing_key,
-          "receiverPublicKey": bobs_public_key}
-)
-assert response.status_code == 200
-data = response.json()
-assert data["status"] == "ok"
-alice_to_bob_rencryption_key = data["reencKey"]
-print("Re-encryption key from alice to bob generated")
-
-# 7. Re-encrypt message
-response = requests.post(
-    URL + "re_encrypt",
-    json={"delegatorPublicKey": public_key,
-          "delegatorVerifyingKey": alices_verifying_key,
-          "receiverPublicKey": bobs_public_key,
-          "reencKey": alice_to_bob_rencryption_key,
-          "capsule": alice_capsule}
-)
-assert response.status_code == 200
-data = response.json()
-assert data["status"] == "ok"
-bob_cfrag = data["cfrag"]
-print()
-print("Bob's encrypted capsule fragment: {}".format(bob_cfrag))
-
-# 5. Finally, bob decryption
-response = requests.post(
-    URL + "decrypt_reenc",
-    json={ # Decryption parameters
-          "receiverPrivateKey": bobs_private_key,
-          "ciphertext": ciphertext,
-          "capsule": alice_capsule,
-          # Re-encryption additional parameters
-          "receiverPublicKey": bobs_public_key,
-          "delegatorPublicKey": public_key,
-          "delegatorVerifyingKey": alices_verifying_key,
-          "cfrag": bob_cfrag}
-)
-#print("Request: {}".format(response.text))
-assert response.status_code == 200
-data = response.json()
-assert data["status"] == "ok"
-assert data["plaintext"] == plaintext
-
-print("Bob successfuly decrypted Alice's re-encrypted message!")
-print("Original message: {}".format(data["plaintext"]))
+# print("Bob successfuly decrypted Alice's re-encrypted message!")
+# print("Original message: {}".format(data["plaintext"]))

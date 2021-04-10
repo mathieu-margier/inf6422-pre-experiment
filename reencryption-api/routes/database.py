@@ -22,6 +22,11 @@ def show_element(c, table, colomn, condition):
     c.execute(query)
     return c.fetchone()
 
+def get_proxy_line(c, message_number, receiver):
+    query = "select * from proxy where MessageNumber = ? and Receiver = ?"
+    c.execute(query, (message_number, receiver))
+    return c.fetchone()
+
 def get_content(c, username):
     query = "select * from message where Number IN (select MessageNumber from proxy where Receiver = ?)"
     c.execute(query, (username,))
