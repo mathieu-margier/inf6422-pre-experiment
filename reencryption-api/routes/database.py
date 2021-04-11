@@ -7,6 +7,10 @@ def add_message(c, number, sender, link, capsule):
     query = "insert into message (Number, Sender, Link, IsMessage, Capsule) values (?, ?, ?, ?, ?)"
     c.execute(query, (number, sender, link, True, capsule))
 
+def add_file(c, number, sender, link, key, capsule):
+    query = "insert into message (Number, Sender, Link, IsMessage, LinkKey, Capsule) values (?, ?, ?, ?, ?, ?)"
+    c.execute(query, (number, sender, link, False, key, capsule))
+
 def add_reenc_key(c, message_number, receiver, reenc_key):
     query = "insert into proxy (MessageNumber, Receiver, ReencKey) values (?, ?, ?)"
     c.execute(query, (message_number, receiver, reenc_key))
@@ -28,7 +32,12 @@ def get_proxy_line(c, message_number, receiver):
     return c.fetchone()
 
 def get_content(c, username):
-    query = "select Number, Sender, Link, Capsule from message where Number IN (select MessageNumber from proxy where Receiver = ?)"
+    query = "select Number, Sender, Link, Capsule from message where Number IN (select MessageNumber from proxy where Receiver = ?) AND message.IsMessage = True"
+    c.execute(query, (username,))
+    return c.fetchall()
+
+def get_file(c, username):
+    query = "select Number, Sender, Link, LinkKey, Capsule from message where Number IN (select MessageNumber from proxy where Receiver = ?) AND message.IsMessage = False"
     c.execute(query, (username,))
     return c.fetchall()
 

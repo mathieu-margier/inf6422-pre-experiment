@@ -1,2 +1,5 @@
 # Local db file
 social_network.db
+
+# Local server-side encrypted files
+files

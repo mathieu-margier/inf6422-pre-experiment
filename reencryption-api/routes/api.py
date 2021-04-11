@@ -3,6 +3,7 @@ import random
 import statistics
 import sqlite3
 import base64
+import os
 from . import database
 from flask import Flask, Blueprint, request, abort, json
 from umbral import pre, keys, config, signing, kfrags, cfrags
@@ -27,7 +28,9 @@ time_stats_endpoints = {
     "send_message": [],
     "get_content": [],
     "encrypt_file": [],
-    "decrypt_file": []
+    "decrypt_file": [],
+    "send_file": [],
+    "get_files": []
 }
 
 # Counter to find messages
@@ -41,6 +44,9 @@ database.initialisation_data_base(c)
 conn.commit()
 conn.close()
 
+# Files init
+FILES_PATH = "files"
+os.makedirs(FILES_PATH, exist_ok=True)
 
 @api.route("/genkey", methods=["GET"])
 def genkey():
@@ -150,6 +156,42 @@ def send_message():
 
     abort(400)
 
+@api.route("socialnetwork/sendfile", methods=["POST"])
+def send_file():
+    if request.content_type.lower() != "application/json":
+        abort(415)
+
+    data = request.get_json()
+
+    if "sender" in data and "encryptedFile" in data and "keyCiphertext" in data and "keyCapsule" in data:
+        try:
+            print("Ajout du fichier")
+            start = time.perf_counter()
+            conn = sqlite3.connect('social_network.db')
+            c = conn.cursor()
+
+            global message_counter
+            message_counter += 1
+
+            # Save encryptedFile
+            link = os.path.join(FILES_PATH, "{}.aes".format(message_counter))
+            with open(link, 'wb') as f:
+                f.write(base64.b64decode(data["encryptedFile"]))
+
+            database.add_file(c, message_counter, data["sender"], link, data["keyCiphertext"], data["keyCapsule"])
+            database.show_table(c, "message")
+            conn.commit()
+            conn.close()
+            end = time.perf_counter()
+            time_stats_endpoints["send_file"].append(end - start)
+            return {"status": "ok", "messageNumber": message_counter}
+
+        except Exception as e:
+            print(e)
+            return {"status": "error", "error": str(e)}
+
+    abort(400)
+
 @api.route("socialnetwork/getcontent", methods=["POST"])
 def get_content():
     if request.content_type.lower() != "application/json":
@@ -167,6 +209,57 @@ def get_content():
             conn.close()
             end = time.perf_counter()
             time_stats_endpoints["get_content"].append(end - start)
+            return {"status": "ok", "contents": contents}
+        except Exception as e:
+            print(e)
+            return {"status": "error", "error": str(e)}
+
+    abort(400)
+
+@api.route("socialnetwork/getfiles", methods=["POST"])
+def get_files():
+    if request.content_type.lower() != "application/json":
+        abort(415)
+
+    data = request.get_json()
+
+    if "username" in data:
+        try:
+            start = time.perf_counter()
+            conn = sqlite3.connect('social_network.db')
+            c = conn.cursor()
+            contents = database.get_file(c, data["username"])
+            print(contents)
+            conn.close()
+            end = time.perf_counter()
+            time_stats_endpoints["get_files"].append(end - start)
+            return {"status": "ok", "contents": contents}
+        except Exception as e:
+            print(e)
+            return {"status": "error", "error": str(e)}
+
+    abort(400)
+
+@api.route("socialnetwork/download_file", methods=["POST"])
+def download_encrypted_file():
+    if request.content_type.lower() != "application/json":
+        abort(415)
+
+    data = request.get_json()
+
+    if "filePath" in data:
+        try:
+            filePath = data["filePath"]
+
+            if not os.path.realpath(filePath).startswith(os.path.realpath(FILES_PATH)):
+                return {"status": "error", "error": "Invalid path, outside of files directory"}
+
+            content = b''
+            with open(filePath, 'rb') as f:
+                content = f.read()
+
+            return {"status": "ok", "content": base64.b64encode(content).decode('ascii')}
+
             return {"status": "ok", "contents": contents}
         except Exception as e:
             print(e)
