@@ -1,4 +1,6 @@
 import requests
+import os
+import base64
 
 SERVER_ADDRESS = "127.0.0.1:5000"
 URL = "http://" + SERVER_ADDRESS + "/api/"
@@ -10,6 +12,10 @@ private_key = ''
 public_key = ''
 signing_key = ''
 verifying_key = ''
+
+# Dossier pour stocker les fichiers télécharges
+DOWNLOAD_FOLDER = "downloads"
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
 # Fonctions pour le menu principal
 def connexion():
@@ -77,7 +83,7 @@ def envoiContenuIndividuel():
 	ciphertext = data["ciphertext"]
 	capsule = data["capsule"]
 	print("ciphertext: {}".format(ciphertext))
-	print("alice's encrypted message: {}".format(capsule))
+	print("{}'s encrypted message: {}".format(username, capsule))
 
 	# Envoi du message chiffré et de la capsule
 	response = requests.post(
@@ -117,7 +123,7 @@ def envoiContenuIndividuel():
 	if(data["status"] != "ok"):
 		print(data["error"])
 		return False
-	print("Re-encryption key from alice to bob generated")
+	print("Re-encryption key from {} to {} generated".format(username, choixEnvoi))
 
 	return True
 
@@ -178,7 +184,7 @@ def receptionContenu():
 			return False
 		receiver_cfrag = data["cfrag"]
 		print()
-		print("Bob's encrypted capsule fragment: {}".format(receiver_cfrag))
+		print("{}'s encrypted capsule fragment: {}".format(username, receiver_cfrag))
 
 		# Déchiffrement du receveur
 		response = requests.post(
@@ -201,7 +207,213 @@ def receptionContenu():
 			return False
 		print("plaintext : ")
 		print(data["plaintext"])
-		print("Bob successfuly decrypted Alice's re-encrypted message!")
+		print("{} successfuly decrypted {}'s re-encrypted message!".format(username, message_sender))
+
+# Fonctions d'envoi et de réception de fichiers
+def envoiFichierIndividuel():
+	print("envoi de fichier individuel")
+
+	# Choix du destinataire
+	choixEnvoi = input('A qui voulez-vous envoyer ce message\nChoix : ')
+	response = requests.post(
+		URL + "socialnetwork/checkuserexistence",
+		json={"usernames": [choixEnvoi]}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+
+	# Choix du fichier
+	filePath = input("Veuillez entrer le chemin d'accès vers votre fichier : ")
+
+	if not os.path.isfile(filePath):
+		print("Le chemin donné n'est pas un fichier")
+		return False
+
+	fileContent = b''
+	with open(filePath, 'rb') as f:
+		fileContent = f.read()
+
+	# Génération de clé et chiffrement symétrique du fichier
+	response = requests.post(
+		URL + "client/encrypt_file",
+		json={"content": base64.b64encode(fileContent).decode('ascii')}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+	fileKey = data["key"]
+	fileEncryptedContent = data["content"]
+	print("symetric key generated: {}".format(fileKey))
+
+	# Chiffrement de la clé symétrique
+	response = requests.post(
+		URL + "client/encrypt",
+		json={"publicKey": public_key, "plaintext": fileKey}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+	keyCiphertext = data["ciphertext"]
+	keyCapsule = data["capsule"]
+	print("symmetric key ciphertext: {}".format(keyCiphertext))
+	print("{}'s encrypted symmetric key: {}".format(username, keyCapsule))
+
+	# Envoi du fichier chiffré, ainsi que la clé chiffrée et la capsule associée
+	response = requests.post(
+		URL + "socialnetwork/sendfile",
+		json={
+			"sender": username,
+			"encryptedFile": fileEncryptedContent,
+			"keyCiphertext": keyCiphertext, "keyCapsule": keyCapsule
+		}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+	message_number = data["messageNumber"]
+
+	# Récupération clé publique du destinataire
+	response = requests.post(
+		URL + "socialnetwork/getpublickeys",
+		json={"username": choixEnvoi}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+	receiver_public_key = data["publicKey"]
+
+	# Génération de la re-encryption key
+	response = requests.post(
+		URL + "client/gen_renc_key",
+		json={"delegatorPrivateKey": private_key,
+			"delegatorSigningKey": signing_key,
+			"receiverPublicKey": receiver_public_key,
+			"receiverUsername": choixEnvoi,
+			"messageNumber": message_number}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+	print("Re-encryption key from {} to {} generated".format(username, choixEnvoi))
+
+	return True
+
+def receptionFichiers():
+	print("réception des fichiers")
+	# Récupération du contenu de Bob
+	response = requests.post(
+		URL + "socialnetwork/getfiles",
+		json={"username": username}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if(data["status"] != "ok"):
+		print(data["error"])
+		return False
+
+	files = data["contents"]
+
+	for file in files:
+		file_number, file_sender, file_path, file_key_ciphertext, file_key_capsule = file
+
+		# Récupération clé publique de l'émetteur
+		response = requests.post(
+			URL + "socialnetwork/getpublickeys",
+			json={"username": file_sender}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if(data["status"] != "ok"):
+			print(data["error"])
+			return False
+		sender_public_key = data["publicKey"]
+		sender_verifying_key = data["verifyingKey"]
+
+		# Re-chiffrement de la clé symétrique
+		response = requests.post(
+			URL + "proxy/re_encrypt",
+			json={"delegatorPublicKey": sender_public_key,
+				"delegatorVerifyingKey": sender_verifying_key,
+				"receiverPublicKey": public_key,
+				"capsule": file_key_capsule,
+				"messageNumber": file_number,
+				"receiver": username}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if(data["status"] != "ok"):
+			print(data["error"])
+			return False
+		receiver_cfrag = data["cfrag"]
+		print()
+		print("{}'s encrypted capsule fragment: {}".format(username, receiver_cfrag))
+
+		# Déchiffrement de la clé symétrique par le receveur
+		response = requests.post(
+			URL + "decrypt_reenc",
+			json={ # Decryption parameters
+				"receiverPrivateKey": private_key,
+				"ciphertext": file_key_ciphertext,
+				"capsule": file_key_capsule,
+				# Re-encryption additional parameters
+				"receiverPublicKey": public_key,
+				"delegatorPublicKey": sender_public_key,
+				"delegatorVerifyingKey": sender_verifying_key,
+				"cfrag": receiver_cfrag}
+		)
+		#print("Request: {}".format(response.text))
+		assert response.status_code == 200
+		data = response.json()
+		if(data["status"] != "ok"):
+			print(data["error"])
+			return False
+		file_key = data["plaintext"]
+		print("symmetric key decrypted : {}".format(file_key))
+
+
+		# Téléchargement du fichier chiffré par clé symétrique
+		response = requests.post(
+			URL + "socialnetwork/download_file",
+			json={"filePath": file_path}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if(data["status"] != "ok"):
+			print(data["error"])
+			return False
+		file_encrypted_content = data["content"]
+
+		# Déchiffrement et sauvegarde du fichier chiffré par clé symétrique
+		response = requests.post(
+			URL + "client/decrypt_file",
+			json={"key": file_key, "content": file_encrypted_content}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if(data["status"] != "ok"):
+			print(data["error"])
+			return False
+		file_decrypted_content = data["content"]
+
+		local_file = os.path.join(DOWNLOAD_FOLDER, "{}_{}".format(username, file_number))
+		with open(local_file, "wb") as f:
+			f.write(base64.b64decode(file_decrypted_content.encode('ascii')))
+
+		print("{} successfuly decrypted {}'s re-encrypted file!".format(username, file_sender))
+		print("Saved to {}".format(local_file))
 
 # Connexion ou inscription
 choice = 0
@@ -215,16 +427,31 @@ while(choice != '1' or not validation):
 	if(choice == '2'):
 		validation = inscription()
 
-# Menu utilisateur connecté
-while(choice != '4'):
-	choice = input('1 - Partager du contenu à une personne\n2 - Partager du contenu à un groupe\n3 - Recevoir le contenu qui m\'est destiné\n4 - Quitter\nChoix : ')
+connected_choices = [
+	("Partager du contenu à une personne", envoiContenuIndividuel),
+	("Partager un fichier à une personne", envoiFichierIndividuel),
+	("Partager du contenu à un groupe", envoiContenuCollectif),
+	("Recevoir le contenu qui m'est destiné", receptionContenu),
+	("Recevoir les fichiers qui me sont destinés", receptionFichiers)
+]
 
-	if(choice == '1'):
-		validation = envoiContenuIndividuel()
-	if(choice == '2'):
-		validation = envoiContenuCollectif()
-	if(choice == '3'):
-		validation = receptionContenu()
+connected_input_dialog = ""
+for i, (msg, f) in enumerate(connected_choices):
+	connected_input_dialog += "{} - {}\n".format(i+1, msg)
+connected_input_dialog += "{} - Quitter\n".format(len(connected_choices) + 1)
+connected_input_dialog += "Choix : "
+
+# Menu utilisateur connecté
+while(choice != str(len(connected_choices)+1)):
+	choice = input(connected_input_dialog)
+
+	try:
+		choiceIndex = int(choice) - 1
+
+		if 0 <= choiceIndex < len(connected_choices):
+			validation = connected_choices[choiceIndex][1]()
+	except ValueError as e:
+		print("Invalid choice : not a number")
 
 
 # ## Signing / verifying keypair

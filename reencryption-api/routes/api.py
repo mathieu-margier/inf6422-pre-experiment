@@ -259,8 +259,6 @@ def download_encrypted_file():
                 content = f.read()
 
             return {"status": "ok", "content": base64.b64encode(content).decode('ascii')}
-
-            return {"status": "ok", "contents": contents}
         except Exception as e:
             print(e)
             return {"status": "error", "error": str(e)}
