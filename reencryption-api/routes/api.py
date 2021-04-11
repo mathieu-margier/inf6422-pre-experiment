@@ -13,10 +13,11 @@ config.set_default_curve()
 
 # Statistics of durations (in second) for each PRE endpoint
 time_stats_endpoints = {
-    "genkey": [],
     "genuser": [],
     "getallkeys": [],
     "getpublickey": [],
+    "getcontent": [],
+    "getowncontent": [],
     "encrypt": [],
     "gen_renc_key": [],
     "re_encrypt": [],
@@ -37,57 +38,48 @@ conn.commit()
 conn.close()
 
 
-@api.route("/genkey", methods=["GET"])
-def genkey():
-    start = time.perf_counter()
-    private_key = keys.UmbralPrivateKey.gen_key()
-    public_key = private_key.get_pubkey()
-    end = time.perf_counter()
-
-    time_stats_endpoints["genkey"].append(end - start)
-
-    return {"status": "ok", "privateKey": private_key.to_bytes().hex(), "publicKey": public_key.to_bytes().hex()}
-
 # Social network endpoints (réalisés par le réseau social)
 @api.route("socialnetwork/genuser", methods=["POST"])    
-def genuser(): 
-	if request.content_type.lower() != "application/json":
-		abort(415)
+def genuser():
+    print('GENERATION UTILISATEUR')
+    if request.content_type.lower() != "application/json":
+        abort(415)
 
-	data = request.get_json()
-	
-	if "username" in data:
-		try:
-			start = time.perf_counter()
-			conn = sqlite3.connect('social_network.db')
-			c = conn.cursor()
-			testExistence = database.show_element(c, "users", "FirstName", data["username"])
-			if(testExistence != None):
-				print("Utilisateur deja present")
-				conn.close()
-				return {"status": "error", "error": "Nom d utilisateur deja utilisé"}
-				
-			else:
-				print("Ajout de l utilisateur")
-				private_key = keys.UmbralPrivateKey.gen_key()
-				public_key = private_key.get_pubkey()
-				signing_key = keys.UmbralPrivateKey.gen_key()
-				verifying_key = signing_key.get_pubkey()
-				database.add_user(c, data["username"], private_key.to_bytes().hex(), public_key.to_bytes().hex(), signing_key.to_bytes().hex(), verifying_key.to_bytes().hex())
-				conn.commit()
-				conn.close()
-				end = time.perf_counter()
-				time_stats_endpoints["genuser"].append(end - start)
-				return {"status": "ok"}
-				
-		except Exception as e:
-			print(e)
-			return {"status": "error", "error": str(e)}
+    data = request.get_json()
 
-	abort(400)
+    if "username" in data:
+        try:
+            start = time.perf_counter()
+            conn = sqlite3.connect('social_network.db')
+            c = conn.cursor()
+            testExistence = database.show_element(c, "users", "FirstName", data["username"])
+            if(testExistence != None):
+                print("Utilisateur deja present")
+                conn.close()
+                return {"status": "error", "error": "Nom d\'utilisateur deja utilisé"}
+
+            else:
+                print("Ajout de l\'utilisateur")
+                private_key = keys.UmbralPrivateKey.gen_key()
+                public_key = private_key.get_pubkey()
+                signing_key = keys.UmbralPrivateKey.gen_key()
+                verifying_key = signing_key.get_pubkey()
+                database.add_user(c, data["username"], private_key.to_bytes().hex(), public_key.to_bytes().hex(), signing_key.to_bytes().hex(), verifying_key.to_bytes().hex())
+                conn.commit()
+                conn.close()
+                end = time.perf_counter()
+                time_stats_endpoints["genuser"].append(end - start)
+                return {"status": "ok"}
+
+        except Exception as e:
+            print(e)
+            return {"status": "error", "error": str(e)}
+
+    abort(400)
 
 @api.route("socialnetwork/getpublickeys", methods=["POST"])
-def get_public_key(): 
+def get_public_key():
+    print('OBTENTION CLES PUBLIQUES')
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -116,7 +108,8 @@ def get_public_key():
     abort(400)
 
 @api.route("socialnetwork/sendmessage", methods=["POST"])    
-def send_message(): 
+def send_message():
+    print('ENVOI MESSAGE')
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -124,7 +117,6 @@ def send_message():
     
     if "sender" in data and "link" in data and "capsule" in data and "IsEncrypted" in data:
         try:
-            print("Ajout du message")
             start = time.perf_counter()
             conn = sqlite3.connect('social_network.db')
             c = conn.cursor()
@@ -132,7 +124,6 @@ def send_message():
             global message_counter
             message_counter += 1
             database.add_message(c, message_counter, data["sender"], data["link"], True, data["capsule"], data["IsEncrypted"])
-            database.show_table(c, "message")
             conn.commit()
             conn.close()
             end = time.perf_counter()
@@ -147,7 +138,7 @@ def send_message():
 
 @api.route("socialnetwork/getcontent", methods=["POST"])
 def get_content():
-    print("recuperation contenu niveau api")
+    print("RECUPERATION CONTENU")
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -162,10 +153,9 @@ def get_content():
                 contents = database.get_content(c, data["username"])
             else:
                 contents = database.get_content_unencrypted(c)
-            print(contents)
             conn.close()
             end = time.perf_counter()
-            time_stats_endpoints["getpublickey"].append(end - start)
+            time_stats_endpoints["getcontent"].append(end - start)
             return {"status": "ok", "contents": contents}
         except Exception as e:
             print(e)
@@ -175,6 +165,7 @@ def get_content():
 
 @api.route("socialnetwork/getowncontent", methods=["POST"])
 def get_own_content():
+    print("RECUPERATION PROPRE CONTENU")
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -186,10 +177,9 @@ def get_own_content():
             conn = sqlite3.connect('social_network.db')
             c = conn.cursor()
             contents = database.get_own_content(c, data["username"])
-            print(contents)
             conn.close()
             end = time.perf_counter()
-            time_stats_endpoints["getpublickey"].append(end - start)
+            time_stats_endpoints["getowncontent"].append(end - start)
             return {"status": "ok", "contents": contents}
         except Exception as e:
             print(e)
@@ -198,7 +188,8 @@ def get_own_content():
     abort(400)
 
 @api.route("socialnetwork/checkuserexistence", methods=["POST"])
-def checkuserexistence(): 
+def checkuserexistence():
+    print("VERIFICATION EXISTENCE UTILISATEUR")
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -206,7 +197,6 @@ def checkuserexistence():
 
     if "usernames" in data:
         try:
-            # start = time.perf_counter()
             conn = sqlite3.connect('social_network.db')
             c = conn.cursor()
             for username in data["usernames"]:
@@ -216,8 +206,6 @@ def checkuserexistence():
                     conn.close()
                     return {"status": "error", "error": "Un des utilisateurs n\'existe pas"}
                 conn.close()
-            # end = time.perf_counter()
-            # time_stats_endpoints["getallkeys"].append(end - start)
             return {"status": "ok"}
         except Exception as e:
             print(e)
@@ -229,41 +217,43 @@ def checkuserexistence():
 
 # Key generator endpoints (réalisés par le générateur de clé)
 @api.route("keygenerator/getallkeys", methods=["POST"])
-def getallkeys(): 
-	if request.content_type.lower() != "application/json":
-		abort(415)
+def getallkeys():
+    print("RECUPERATION DE TOUTES LES CLES")
+    if request.content_type.lower() != "application/json":
+        abort(415)
 
-	data = request.get_json()
+    data = request.get_json()
 
-	if "username" in data:
-		try:
-			start = time.perf_counter()
-			conn = sqlite3.connect('social_network.db')
-			c = conn.cursor()
-			user = database.show_element(c, "users", "FirstName", data["username"])
-			if(user == None):
-				print("L\'utilisateur n\'existe pas")
-				conn.close()
-				return {"status": "error", "error": "L\'utilisateur n\'existe pas"}
-			private_key = user[2]
-			public_key = user[1]
-			signing_key = user[4]
-			verifying_key = user[3]
-			conn.close()
-			end = time.perf_counter()
-			time_stats_endpoints["getallkeys"].append(end - start)
-			return {"status": "ok", "privateKey": private_key, "publicKey": public_key, "signingKey": signing_key, "verifyingKey": verifying_key}
-		except Exception as e:
-			print(e)
-			return {"status": "error", "error": str(e)}
-	
-	abort(400)
+    if "username" in data:
+        try:
+            start = time.perf_counter()
+            conn = sqlite3.connect('social_network.db')
+            c = conn.cursor()
+            user = database.show_element(c, "users", "FirstName", data["username"])
+            if(user == None):
+                print("L\'utilisateur n\'existe pas")
+                conn.close()
+                return {"status": "error", "error": "L\'utilisateur n\'existe pas"}
+            private_key = user[2]
+            public_key = user[1]
+            signing_key = user[4]
+            verifying_key = user[3]
+            conn.close()
+            end = time.perf_counter()
+            time_stats_endpoints["getallkeys"].append(end - start)
+            return {"status": "ok", "privateKey": private_key, "publicKey": public_key, "signingKey": signing_key, "verifyingKey": verifying_key}
+        except Exception as e:
+            print(e)
+            return {"status": "error", "error": str(e)}
+
+    abort(400)
 
 
 
 # Client tasks endpoints (réalisé sur le client)
 @api.route("client/encrypt", methods=["POST"])
 def encrypt():
+    print("CHIFFREMENT")
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -287,6 +277,7 @@ def encrypt():
 
 @api.route("client/gen_renc_key", methods=["POST"])
 def gen_rencryption_key():
+    print("GENERATION CLE DE RE-ENCRYPTION")
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -309,19 +300,19 @@ def gen_rencryption_key():
             c = conn.cursor()
             database.add_reenc_key(c, data["messageNumber"], data["receiverUsername"], kfrag.to_bytes().hex())
             conn.commit()
+            conn.close()
             end = time.perf_counter()
 
             time_stats_endpoints["gen_renc_key"].append(end - start)
-            database.show_table(c, "proxy")
-            conn.close()
             return {"status": "ok"}
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
     abort(400)
 
-@api.route("/client/decrypt", methods=["POST"])
+@api.route("client/decrypt", methods=["POST"])
 def decrypt():
+    print("DECHIFFREMENT")
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -346,8 +337,9 @@ def decrypt():
 
     abort(400)
 
-@api.route("/decrypt_reenc", methods=["POST"])
+@api.route("client/decrypt_reenc", methods=["POST"])
 def decrypt_reenc():
+    print("DECHIFFREMENENT DE CONTENU RE-ENCRYPTE")
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -389,6 +381,7 @@ def decrypt_reenc():
 # Proxy re-encryption endpoints (réalisés par le proxy)
 @api.route("proxy/re_encrypt", methods=["POST"])
 def re_encrypt():
+    print("RE-ENCRYPTION")
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -403,7 +396,6 @@ def re_encrypt():
             conn = sqlite3.connect('social_network.db')
             c = conn.cursor()
             reenc_key_line = database.get_proxy_line(c, data["messageNumber"], data["receiver"])
-            print(reenc_key_line[2])
             conn.close()
             delegatorPubKey = keys.UmbralPublicKey.from_hex(data["delegatorPublicKey"])
             delegatorVerifKey = keys.UmbralPublicKey.from_hex(data["delegatorVerifyingKey"])

@@ -79,18 +79,5 @@ def initialisation_data_base(c):
         ReencKey varchar (255))""")
 
 
-def message_recieved(c, person):
-    args = (person,)
-    query = """select * from message where Reciever = ? and IsMessage = True"""
-    c.execute(query, args)
-    print(c.fetchall())
-
-
-def message_sent(c, person):
-    args = (person,)
-    query = """select * from message where Sender = ? and IsMessage = True"""
-    c.execute(query, args)
-    print(c.fetchall())
-
 
 
