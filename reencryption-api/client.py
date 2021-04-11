@@ -380,6 +380,8 @@ def envoiFichierIndividuel():
 	with open(filePath, 'rb') as f:
 		fileContent = f.read()
 
+	print("CHIFFREMENT DU FICHIER AVEC CLÉ SYMÉTRIQUE")
+
 	# Génération de clé et chiffrement symétrique du fichier
 	response = requests.post(
 		URL + "client/encrypt_file",
@@ -395,6 +397,7 @@ def envoiFichierIndividuel():
 	print("symetric key generated: {}".format(fileKey))
 
 	# Chiffrement de la clé symétrique
+	print("CHIFFREMENT DE LA CLÉ SYMÉTRIQUE")
 	response = requests.post(
 		URL + "client/encrypt",
 		json={"publicKey": public_key, "plaintext": fileKey}
@@ -410,6 +413,7 @@ def envoiFichierIndividuel():
 	print("{}'s encrypted symmetric key: {}".format(username, keyCapsule))
 
 	# Envoi du fichier chiffré, ainsi que la clé chiffrée et la capsule associée
+	print("ENVOI DU FICHIER CHIFFRÉ, ET DE LA CLÉ DE CHIFFREMENT CHIFFRÉ")
 	response = requests.post(
 		URL + "socialnetwork/sendfile",
 		json={
@@ -438,6 +442,7 @@ def envoiFichierIndividuel():
 	receiver_public_key = data["publicKey"]
 
 	# Génération de la re-encryption key
+	print("GÉNÉRATION DE LA CLÉ DE RECHIFFREMENT")
 	response = requests.post(
 		URL + "client/gen_renc_key",
 		json={"delegatorPrivateKey": private_key,
@@ -487,6 +492,7 @@ def receptionFichiers():
 		sender_verifying_key = data["verifyingKey"]
 
 		# Re-chiffrement de la clé symétrique
+		print("RECHIFFREMENT DE LA CLÉ SYMÉTRIQUE")
 		response = requests.post(
 			URL + "proxy/re_encrypt",
 			json={"delegatorPublicKey": sender_public_key,
@@ -506,6 +512,7 @@ def receptionFichiers():
 		print("{}'s encrypted capsule fragment: {}".format(username, receiver_cfrag))
 
 		# Déchiffrement de la clé symétrique par le receveur
+		print("DECHIFFREMENT DE LA CLÉ SYMÉTRIQUE")
 		response = requests.post(
 			URL + "client/decrypt_reenc",
 			json={ # Decryption parameters
@@ -541,6 +548,7 @@ def receptionFichiers():
 		file_encrypted_content = data["content"]
 
 		# Déchiffrement et sauvegarde du fichier chiffré par clé symétrique
+		print("DÉCHIFFREMENT DU FICHIER AVEC CLÉ SYMÉTRIQUE")
 		response = requests.post(
 			URL + "client/decrypt_file",
 			json={"key": file_key, "content": file_encrypted_content}
