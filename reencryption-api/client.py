@@ -30,7 +30,7 @@ def connexion():
 	else:
 		print(data["error"])
 		return False, '', '', '', '', ''
-	
+
 def inscription():
 	username = input('Nom d\'utilisateur : ')
 	response = requests.post(
@@ -146,7 +146,7 @@ def receptionContenu():
 		message_number = message[0]
 		message_sender = message[1]
 		message_content = message[2]
-		message_capsule = message[4]
+		message_capsule = message[3]
 
 		# Récupération clé publique du destinataire
 		response = requests.post(
@@ -214,8 +214,8 @@ while(choice != '1' or not validation):
 		validation, private_key, public_key, signing_key, verifying_key, username = connexion()
 	if(choice == '2'):
 		validation = inscription()
-		
-# Menu utilisateur connecté		
+
+# Menu utilisateur connecté
 while(choice != '4'):
 	choice = input('1 - Partager du contenu à une personne\n2 - Partager du contenu à un groupe\n3 - Recevoir le contenu qui m\'est destiné\n4 - Quitter\nChoix : ')
 

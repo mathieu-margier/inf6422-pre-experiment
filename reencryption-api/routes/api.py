@@ -22,7 +22,8 @@ time_stats_endpoints = {
     "re_encrypt": [],
     "decrypt": [],
     "decrypt_reenc": [],
-    "send_message": []
+    "send_message": [],
+    "get_content": []
 }
 
 # Counter to find messages
@@ -49,13 +50,13 @@ def genkey():
     return {"status": "ok", "privateKey": private_key.to_bytes().hex(), "publicKey": public_key.to_bytes().hex()}
 
 # Social network endpoints (réalisés par le réseau social)
-@api.route("socialnetwork/genuser", methods=["POST"])    
-def genuser(): 
+@api.route("socialnetwork/genuser", methods=["POST"])
+def genuser():
 	if request.content_type.lower() != "application/json":
 		abort(415)
 
 	data = request.get_json()
-	
+
 	if "username" in data:
 		try:
 			start = time.perf_counter()
@@ -66,7 +67,7 @@ def genuser():
 				print("Utilisateur deja present")
 				conn.close()
 				return {"status": "error", "error": "Nom d utilisateur deja utilisé"}
-				
+
 			else:
 				print("Ajout de l utilisateur")
 				private_key = keys.UmbralPrivateKey.gen_key()
@@ -79,7 +80,7 @@ def genuser():
 				end = time.perf_counter()
 				time_stats_endpoints["genuser"].append(end - start)
 				return {"status": "ok"}
-				
+
 		except Exception as e:
 			print(e)
 			return {"status": "error", "error": str(e)}
@@ -87,7 +88,7 @@ def genuser():
 	abort(400)
 
 @api.route("socialnetwork/getpublickeys", methods=["POST"])
-def get_public_key(): 
+def get_public_key():
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -112,16 +113,16 @@ def get_public_key():
         except Exception as e:
             print(e)
             return {"status": "error", "error": str(e)}
-    
+
     abort(400)
 
-@api.route("socialnetwork/sendmessage", methods=["POST"])    
-def send_message(): 
+@api.route("socialnetwork/sendmessage", methods=["POST"])
+def send_message():
     if request.content_type.lower() != "application/json":
         abort(415)
 
     data = request.get_json()
-    
+
     if "sender" in data and "link" in data and "capsule" in data:
         try:
             print("Ajout du message")
@@ -131,14 +132,14 @@ def send_message():
 
             global message_counter
             message_counter += 1
-            database.add_message(c, message_counter, data["sender"], data["link"], True, data["capsule"])
+            database.add_message(c, message_counter, data["sender"], data["link"], data["capsule"])
             database.show_table(c, "message")
             conn.commit()
             conn.close()
             end = time.perf_counter()
             time_stats_endpoints["send_message"].append(end - start)
             return {"status": "ok", "messageNumber": message_counter}
-                
+
         except Exception as e:
             print(e)
             return {"status": "error", "error": str(e)}
@@ -146,7 +147,7 @@ def send_message():
     abort(400)
 
 @api.route("socialnetwork/getcontent", methods=["POST"])
-def get_content(): 
+def get_content():
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -161,7 +162,7 @@ def get_content():
             print(contents)
             conn.close()
             end = time.perf_counter()
-            time_stats_endpoints["getpublickey"].append(end - start)
+            time_stats_endpoints["get_content"].append(end - start)
             return {"status": "ok", "contents": contents}
         except Exception as e:
             print(e)
@@ -170,7 +171,7 @@ def get_content():
     abort(400)
 
 @api.route("socialnetwork/checkuserexistence", methods=["POST"])
-def checkuserexistence(): 
+def checkuserexistence():
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -194,14 +195,14 @@ def checkuserexistence():
         except Exception as e:
             print(e)
             return {"status": "error", "error": str(e)}
-    
+
     abort(400)
 
 
 
 # Key generator endpoints (réalisés par le générateur de clé)
 @api.route("keygenerator/getallkeys", methods=["POST"])
-def getallkeys(): 
+def getallkeys():
 	if request.content_type.lower() != "application/json":
 		abort(415)
 
@@ -228,7 +229,7 @@ def getallkeys():
 		except Exception as e:
 			print(e)
 			return {"status": "error", "error": str(e)}
-	
+
 	abort(400)
 
 
@@ -424,6 +425,3 @@ def time_stats(endpoint):
         }
     else:
         return {"status": "error", "error": "Wrong endpoint '{}', shoud be one of {}".format(endpoint, list(time_stats_endpoints))}
-
-
-

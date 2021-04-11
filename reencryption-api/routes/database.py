@@ -3,9 +3,9 @@ def add_user(c, name, private_key, public_key, signing_key, verifying_key):
     query = "insert into users (FirstName,Public_key,Private_key,Verifying_key,Signing_key) values (?, ?, ?, ?, ?)"
     c.execute(query, (name, public_key, private_key, verifying_key, signing_key))
 
-def add_message(c, number, sender, link, is_message, capsule):
+def add_message(c, number, sender, link, capsule):
     query = "insert into message (Number, Sender, Link, IsMessage, Capsule) values (?, ?, ?, ?, ?)"
-    c.execute(query, (number, sender, link, is_message, capsule))
+    c.execute(query, (number, sender, link, True, capsule))
 
 def add_reenc_key(c, message_number, receiver, reenc_key):
     query = "insert into proxy (MessageNumber, Receiver, ReencKey) values (?, ?, ?)"
@@ -28,7 +28,7 @@ def get_proxy_line(c, message_number, receiver):
     return c.fetchone()
 
 def get_content(c, username):
-    query = "select * from message where Number IN (select MessageNumber from proxy where Receiver = ?)"
+    query = "select Number, Sender, Link, Capsule from message where Number IN (select MessageNumber from proxy where Receiver = ?)"
     c.execute(query, (username,))
     return c.fetchall()
 
@@ -37,29 +37,30 @@ def get_content(c, username):
 
 def initialisation_data_base(c):
     ## Dropping Tables
-    c.execute("""DROP TABLE users""")
-    c.execute("""DROP TABLE message""")
-    c.execute("""DROP TABLE proxy""")
+    c.execute("""DROP TABLE IF EXISTS users""")
+    c.execute("""DROP TABLE IF EXISTS message""")
+    c.execute("""DROP TABLE IF EXISTS proxy""")
 
     ## Creating Tables
     c.execute("""CREATE TABLE users (
-        FirstName varchar(255),
-        Public_key varchar (255),
-        Private_key varchar (255),
-        Verifying_key varchar (255),
-        Signing_key varchar (255))""")
+        FirstName varchar(255) NOT NULL,
+        Public_key varchar (255) NOT NULL,
+        Private_key varchar (255) NOT NULL,
+        Verifying_key varchar (255) NOT NULL,
+        Signing_key varchar (255) NOT NULL)""")
 
     c.execute("""CREATE TABLE message (
-        Number int,
-        Sender varchar(255),
-        Link varchar (255),
-        IsMessage boolean,
-        Capsule varchar (255))""")
+        Number int NOT NULL,
+        Sender varchar(255) NOT NULL,
+        Link varchar (255) NOT NULL,
+        IsMessage boolean NOT NULL,
+        LinkKey varchar (255),
+        Capsule varchar (255) NOT NULL)""")
 
     c.execute("""CREATE TABLE proxy (
-        MessageNumber int,
-        Receiver varchar(255),
-        ReencKey varchar (255))""")
+        MessageNumber int NOT NULL,
+        Receiver varchar(255) NOT NULL,
+        ReencKey varchar (255) NOT NULL )""")
 
 
 def message_recieved(c, person):
@@ -74,6 +75,3 @@ def message_sent(c, person):
     query = """select * from message where Sender = ? and IsMessage = True"""
     c.execute(query, args)
     print(c.fetchall())
-
-
-
