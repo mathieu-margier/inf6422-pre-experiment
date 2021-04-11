@@ -1,15 +1,19 @@
 # Fonctions pour la db
+import sqlite3
+
+
 def add_user(c, name, private_key, public_key, signing_key, verifying_key):
     query = "insert into users (FirstName,Public_key,Private_key,Verifying_key,Signing_key) values (?, ?, ?, ?, ?)"
     c.execute(query, (name, public_key, private_key, verifying_key, signing_key))
 
-def add_message(c, number, sender, link, capsule):
-    query = "insert into message (Number, Sender, Link, IsMessage, Capsule) values (?, ?, ?, ?, ?)"
-    c.execute(query, (number, sender, link, True, capsule))
+def add_message(c, number, sender, link, capsule, is_encrypted):
+    query = "insert into message (Number, Sender, Link, IsMessage, Capsule, IsEncrypted) values (?, ?, ?, ?, ?, ?)"
+    c.execute(query, (number, sender, link, True, capsule, is_encrypted))
 
 def add_file(c, number, sender, link, key, capsule):
-    query = "insert into message (Number, Sender, Link, IsMessage, LinkKey, Capsule) values (?, ?, ?, ?, ?, ?)"
-    c.execute(query, (number, sender, link, False, key, capsule))
+    # TODO Handle not encrypted files
+    query = "insert into message (Number, Sender, Link, IsMessage, LinkKey, Capsule, IsEncrypted) values (?, ?, ?, ?, ?, ?, ?)"
+    c.execute(query, (number, sender, link, False, key, capsule, True))
 
 def add_reenc_key(c, message_number, receiver, reenc_key):
     query = "insert into proxy (MessageNumber, Receiver, ReencKey) values (?, ?, ?)"
@@ -32,12 +36,22 @@ def get_proxy_line(c, message_number, receiver):
     return c.fetchone()
 
 def get_content(c, username):
-    query = "select Number, Sender, Link, Capsule from message where Number IN (select MessageNumber from proxy where Receiver = ?) AND message.IsMessage = True"
+    query = "select Number, Sender, Link, Capsule, IsEncrypted from message where Number IN (select MessageNumber from proxy where Receiver = ?) AND message.IsMessage = True"
     c.execute(query, (username,))
     return c.fetchall()
 
 def get_file(c, username):
     query = "select Number, Sender, Link, LinkKey, Capsule from message where Number IN (select MessageNumber from proxy where Receiver = ?) AND message.IsMessage = False"
+    c.execute(query, (username,))
+    return c.fetchall()
+
+def get_content_unencrypted(c):
+    query = "select * from message where IsEncrypted is FALSE "
+    c.execute(query,)
+    return c.fetchall()
+
+def get_own_content(c, username):
+    query = "select Number, Sender, Link, Capsule, IsEncrypted from message where Sender = ? AND message.IsMessage = True"
     c.execute(query, (username,))
     return c.fetchall()
 
@@ -64,23 +78,10 @@ def initialisation_data_base(c):
         Link varchar (255) NOT NULL,
         IsMessage boolean NOT NULL,
         LinkKey varchar (255),
-        Capsule varchar (255) NOT NULL)""")
+        Capsule varchar (255) NOT NULL,
+        IsEncrypted boolean NOT NULL)""")
 
     c.execute("""CREATE TABLE proxy (
         MessageNumber int NOT NULL,
         Receiver varchar(255) NOT NULL,
         ReencKey varchar (255) NOT NULL )""")
-
-
-def message_recieved(c, person):
-    args = (person,)
-    query = """select * from message where Reciever = ? and IsMessage = True"""
-    c.execute(query, args)
-    print(c.fetchall())
-
-
-def message_sent(c, person):
-    args = (person,)
-    query = """select * from message where Sender = ? and IsMessage = True"""
-    c.execute(query, args)
-    print(c.fetchall())

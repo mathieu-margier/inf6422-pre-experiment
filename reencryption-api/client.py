@@ -32,6 +32,10 @@ def connexion():
 		public_key = data["publicKey"]
 		signing_key = data["signingKey"]
 		verifying_key = data["verifyingKey"]
+		print("clé public : " + public_key)
+		print("clé privée : " + private_key)
+		print("clé de signature : " + signing_key)
+		print("clé de verification : " + verifying_key)
 		return True, private_key, public_key, signing_key, verifying_key, user
 	else:
 		print(data["error"])
@@ -71,6 +75,7 @@ def envoiContenuIndividuel():
 
 	# Message et chiffrement
 	message = input('Veuillez entrer votre message\nMessage : ')
+	print('CHIFFREMENT')
 	response = requests.post(
 		URL + "client/encrypt",
 		json={"publicKey": public_key, "plaintext": message}
@@ -83,12 +88,13 @@ def envoiContenuIndividuel():
 	ciphertext = data["ciphertext"]
 	capsule = data["capsule"]
 	print("ciphertext: {}".format(ciphertext))
-	print("{}'s encrypted message: {}".format(username, capsule))
+	print("capsule : {}".format(capsule))
 
 	# Envoi du message chiffré et de la capsule
+	print ('ENVOI AU RESEAU SOCIAL')
 	response = requests.post(
 		URL + "socialnetwork/sendmessage",
-		json={"sender": username, "link": ciphertext, "capsule": capsule}
+		json={"sender": username, "link": ciphertext, "capsule": capsule, "IsEncrypted": True}
 	)
 	assert response.status_code == 200
 	data = response.json()
@@ -98,6 +104,7 @@ def envoiContenuIndividuel():
 	message_number = data["messageNumber"]
 
 	# Récupération clé publique du destinataire
+	print('RECUPERATION CLE PUBLIQUE DU DESTINATAIRE')
 	response = requests.post(
 		URL + "socialnetwork/getpublickeys",
 		json={"username": choixEnvoi}
@@ -108,8 +115,10 @@ def envoiContenuIndividuel():
 		print(data["error"])
 		return False
 	receiver_public_key = data["publicKey"]
+	print("clé publique destinataire : " + receiver_public_key)
 
 	# Génération de la re-encryption key
+	print('GENERATION ET STOCKAGE DE LA CLE DE RE-ENCRYPTION')
 	response = requests.post(
 		URL + "client/gen_renc_key",
 		json={"delegatorPrivateKey": private_key,
@@ -123,20 +132,96 @@ def envoiContenuIndividuel():
 	if(data["status"] != "ok"):
 		print(data["error"])
 		return False
-	print("Re-encryption key from {} to {} generated".format(username, choixEnvoi))
 
 	return True
 
 def envoiContenuCollectif():
 	print("envoi de message collectif")
+	recievers=[]
+	number_reviever = int(input('A combien de personnes voulez vous envoyer ce message\nNombre : '))
+	for i in range(number_reviever):
+
+		# Choix du destinataire
+		choixEnvoi = input('A qui voulez-vous envoyer ce message\nChoix : ')
+		response = requests.post(
+			URL + "socialnetwork/checkuserexistence",
+			json={"usernames": [choixEnvoi]}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if (data["status"] != "ok"):
+			print(data["error"])
+			return False
+		recievers.append(choixEnvoi)
+
+	# Message et chiffrement
+	message = input('Veuillez entrer votre message\nMessage : ')
+	print('CHIFFREMENT DU MESSAGE')
+	response = requests.post(
+		URL + "client/encrypt",
+		json={"publicKey": public_key, "plaintext": message}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if (data["status"] != "ok"):
+		print(data["error"])
+		return False
+	ciphertext = data["ciphertext"]
+	capsule = data["capsule"]
+	print("ciphertext: {}".format(ciphertext))
+	print("capsule: {}".format(capsule))
+
+	# Envoi du message chiffré et de la capsule
+	print('ENVOI MESSAGE AU RESEAU SOCIAL')
+	response = requests.post(
+		URL + "socialnetwork/sendmessage",
+		json={"sender": username, "link": ciphertext, "capsule": capsule, "IsEncrypted": True}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if (data["status"] != "ok"):
+		print(data["error"])
+		return False
+	message_number = data["messageNumber"]
+
+	# Récupération clé publique du destinataire
+	print('RECUPERATION CLES PUBLIQUES ET GENERATION CLES DE REENCRYPTION POUR CHAQUE DESTINATAIRE')
+	for person in recievers:
+		response = requests.post(
+			URL + "socialnetwork/getpublickeys",
+			json={"username": person}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if (data["status"] != "ok"):
+			print(data["error"])
+			return False
+		receiver_public_key = data["publicKey"]
+
+	# Génération de la re-encryption key
+		response = requests.post(
+			URL + "client/gen_renc_key",
+			json={"delegatorPrivateKey": private_key,
+				  "delegatorSigningKey": signing_key,
+				  "receiverPublicKey": receiver_public_key,
+				  "receiverUsername": person,
+				  "messageNumber": message_number}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if (data["status"] != "ok"):
+			print(data["error"])
+			return False
+		print("Re-encryption key from "+ username +" to "+ person + " generated")
+
 	return True
 
 def receptionContenu():
-	print("réception de contenu")
+	print("RECUPERATION DU CONTENU CHIFFRE DEPUIS LE RESEAU SOCIAL")
 	# Récupération du contenu de Bob
 	response = requests.post(
 		URL + "socialnetwork/getcontent",
-		json={"username": username}
+		json={"username": username, "IsEncrypted" : True}
 	)
 	assert response.status_code == 200
 	data = response.json()
@@ -148,13 +233,17 @@ def receptionContenu():
 
 
 	# Re-encryption des messages
+
 	for message in messages:
 		message_number = message[0]
 		message_sender = message[1]
 		message_content = message[2]
 		message_capsule = message[3]
 
-		# Récupération clé publique du destinataire
+		print('message chiffré : '+message_content)
+
+		# Récupération clé publique de l'emetteur
+		print ('RECUPERATION CLE PUBLIQUE DE L\'EMETTEUR')
 		response = requests.post(
 			URL + "socialnetwork/getpublickeys",
 			json={"username": message_sender}
@@ -167,7 +256,11 @@ def receptionContenu():
 		sender_public_key = data["publicKey"]
 		sender_verifying_key = data["verifyingKey"]
 
+		print('clé publique emetteur : '+ sender_public_key)
+		print('clé de verification emetteur : ' + sender_verifying_key)
+
 		# Re-encryption du message
+		print('RE-ENCRYPTION DU MESSAGE')
 		response = requests.post(
 			URL + "proxy/re_encrypt",
 			json={"delegatorPublicKey": sender_public_key,
@@ -183,12 +276,12 @@ def receptionContenu():
 			print(data["error"])
 			return False
 		receiver_cfrag = data["cfrag"]
-		print()
-		print("{}'s encrypted capsule fragment: {}".format(username, receiver_cfrag))
+		print("message re-encrypté: {}".format(receiver_cfrag))
 
 		# Déchiffrement du receveur
+		print('DECHIFFREMENT DESTINATAIRE')
 		response = requests.post(
-			URL + "decrypt_reenc",
+			URL + "client/decrypt_reenc",
 			json={ # Decryption parameters
 				"receiverPrivateKey": private_key,
 				"ciphertext": message_content,
@@ -199,15 +292,66 @@ def receptionContenu():
 				"delegatorVerifyingKey": sender_verifying_key,
 				"cfrag": receiver_cfrag}
 		)
-		#print("Request: {}".format(response.text))
 		assert response.status_code == 200
 		data = response.json()
 		if(data["status"] != "ok"):
 			print(data["error"])
 			return False
+		print("from : " + message_sender)
 		print("plaintext : ")
 		print(data["plaintext"])
-		print("{} successfuly decrypted {}'s re-encrypted message!".format(username, message_sender))
+		print("OPERATION TERMINEE")
+
+def boiteEnvoie():
+	print("visualiation des messages émis")
+	# Récupération du contenu
+	print('RECUPERATION DES MESSAGES CHIFFRES DEPUIS LE RESEAU SOCIAL')
+	response = requests.post(
+		URL + "socialnetwork/getowncontent",
+		json={"username": username}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if (data["status"] != "ok"):
+		print(data["error"])
+		return False
+
+	messages = data["contents"]
+
+	# Re-encryption des messages
+	for message in messages:
+		message_number = message[0]
+		message_content = message[2]
+		message_capsule = message[3]
+		message_encrypted = message[4]
+
+		if not message_encrypted:
+			print("message numéro : " + str(message_number) + " (non chiffré)")
+			print("plaintext : ")
+			print(message_content)
+			print("OPERATION TERMINEE")
+			return
+
+		print('message chiffré : ' + message_content)
+
+		# Déchiffrement du receveur
+		print('DECHIFFREMENT RECEVEUR')
+		response = requests.post(
+			URL + "client/decrypt",
+			json={"receiverPrivateKey": private_key, "ciphertext": message_content, "capsule": message_capsule}
+		)
+		# print("Request: {}".format(response.text))
+		assert response.status_code == 200
+		data = response.json()
+		if (data["status"] != "ok"):
+			print(data["error"])
+			return False
+		print("message numéro : " + str(message_number))
+		print("plaintext : ")
+		print(data["plaintext"])
+
+		print("OPERATION TERMINEE")
+
 
 # Fonctions d'envoi et de réception de fichiers
 def envoiFichierIndividuel():
@@ -363,7 +507,7 @@ def receptionFichiers():
 
 		# Déchiffrement de la clé symétrique par le receveur
 		response = requests.post(
-			URL + "decrypt_reenc",
+			URL + "client/decrypt_reenc",
 			json={ # Decryption parameters
 				"receiverPrivateKey": private_key,
 				"ciphertext": file_key_ciphertext,
@@ -415,6 +559,55 @@ def receptionFichiers():
 		print("{} successfuly decrypted {}'s re-encrypted file!".format(username, file_sender))
 		print("Saved to {}".format(local_file))
 
+# Envoi/récpetion de message non chiffré
+def envoieSansEncryption():
+	print("envoi de message individuel sans encryption")
+
+	# Message et chiffrement
+	message = input('Veuillez entrer votre message\nMessage : ')
+
+	# Envoi du message chiffré et de la capsule
+	print('ENVOI AU RESEAU SOCIAL')
+	response = requests.post(
+		URL + "socialnetwork/sendmessage",
+		json={"sender": username, "link": message, "capsule": message, "IsEncrypted": False}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if (data["status"] != "ok"):
+		print(data["error"])
+		return False
+
+	return True
+
+def receptionSansEncryption():
+	print("réception de contenu non encrypté")
+	# Récupération du contenu
+	print('RECUPERATION DU CONTENU')
+	response = requests.post(
+		URL + "socialnetwork/getcontent",
+		json={"username": username, "IsEncrypted": False},
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if (data["status"] != "ok"):
+		print(data["error"])
+		return False
+
+	messages = data["contents"]
+
+	for message in messages:
+		message_number = message[0]
+		message_sender = message[1]
+		message_content = message[2]
+
+		print("de : " + message_sender)
+		print("numero : " + str(message_number))
+		print("message non chiffré : ")
+		print(message_content)
+
+	return True
+
 # Connexion ou inscription
 choice = 0
 validation = False
@@ -429,9 +622,12 @@ while(choice != '1' or not validation):
 
 connected_choices = [
 	("Partager du contenu à une personne", envoiContenuIndividuel),
-	("Partager un fichier à une personne", envoiFichierIndividuel),
 	("Partager du contenu à un groupe", envoiContenuCollectif),
+	("Partager un fichier à une personne", envoiFichierIndividuel),
+	("Partager du contenu non chiffré à tout le monde", envoieSansEncryption),
+	("Voir mes messages envoyés", boiteEnvoie),
 	("Recevoir le contenu qui m'est destiné", receptionContenu),
+	("Recevoir du contenu non chiffré", receptionSansEncryption),
 	("Recevoir les fichiers qui me sont destinés", receptionFichiers)
 ]
 
@@ -452,114 +648,3 @@ while(choice != str(len(connected_choices)+1)):
 			validation = connected_choices[choiceIndex][1]()
 	except ValueError as e:
 		print("Invalid choice : not a number")
-
-
-# ## Signing / verifying keypair
-# response = requests.get(URL + "genkey")
-# assert response.status_code == 200
-# data = response.json()
-# assert data["status"] == "ok"
-# alices_signing_key = data["privateKey"]
-# alices_verifying_key = data["publicKey"]
-
-# # 2. Generate Bob keys
-
-# ## Private / public keypair
-# response = requests.get(URL + "genkey")
-# assert response.status_code == 200
-# data = response.json()
-# assert data["status"] == "ok"
-# bobs_private_key = data["privateKey"]
-# bobs_public_key = data["publicKey"]
-
-# # 3. Encrypt plaintext for Alice
-
-# plaintext = 'Proxy Re-encryption is cool!'
-# print("plaintext: {}".format(plaintext))
-# response = requests.post(
-#     URL + 'encrypt',
-#     json={"publicKey": public_key, "plaintext": plaintext}
-# )
-# #print("Request: {}".format(response.text))
-# assert response.status_code == 200
-# data = response.json()
-# assert data["status"] == "ok"
-# ciphertext = data["ciphertext"]
-# alice_capsule = data["capsule"]
-
-# print("ciphertext: {}".format(ciphertext))
-# print("alice's encrypted message: {}".format(alice_capsule))
-# print()
-
-# # 4. Test alice's decryption
-# response = requests.post(
-#     URL + "decrypt",
-#     json={"receiverPrivateKey": private_key, "ciphertext": ciphertext, "capsule": alice_capsule}
-# )
-# assert response.status_code == 200
-# data = response.json()
-# assert data["status"] == "ok"
-# assert data["plaintext"] == plaintext
-# print("Alice successfuly decrypt her message!")
-
-# # 5. Test bob's decryption (should fail)
-# response = requests.post(
-#     URL + "decrypt",
-#     json={"receiverPrivateKey": bobs_private_key, "ciphertext": ciphertext, "capsule": alice_capsule}
-# )
-# assert response.status_code == 200
-# data = response.json()
-# assert data["status"] == "error"
-# print("Bob could not decrypt Alice's message!")
-# print()
-
-# # 6. Generate re-encryption key
-# response = requests.post(
-#     URL + "gen_renc_key",
-#     json={"delegatorPrivateKey": private_key,
-#           "delegatorSigningKey": alices_signing_key,
-#           "receiverPublicKey": bobs_public_key}
-# )
-# assert response.status_code == 200
-# data = response.json()
-# assert data["status"] == "ok"
-# alice_to_bob_rencryption_key = data["reencKey"]
-# print("Re-encryption key from alice to bob generated")
-
-# # 7. Re-encrypt message
-# response = requests.post(
-#     URL + "re_encrypt",
-#     json={"delegatorPublicKey": public_key,
-#           "delegatorVerifyingKey": alices_verifying_key,
-#           "receiverPublicKey": bobs_public_key,
-#           "reencKey": alice_to_bob_rencryption_key,
-#           "capsule": alice_capsule}
-# )
-# assert response.status_code == 200
-# data = response.json()
-# assert data["status"] == "ok"
-# bob_cfrag = data["cfrag"]
-# print()
-# print("Bob's encrypted capsule fragment: {}".format(bob_cfrag))
-
-# # 5. Finally, bob decryption
-# response = requests.post(
-#     URL + "decrypt_reenc",
-#     json={ # Decryption parameters
-#           "receiverPrivateKey": bobs_private_key,
-#           "ciphertext": ciphertext,
-#           "capsule": alice_capsule,
-#           # Re-encryption additional parameters
-#           "receiverPublicKey": bobs_public_key,
-#           "delegatorPublicKey": public_key,
-#           "delegatorVerifyingKey": alices_verifying_key,
-#           "cfrag": bob_cfrag}
-# )
-# #print("Request: {}".format(response.text))
-# assert response.status_code == 200
-# data = response.json()
-# assert data["status"] == "ok"
-# assert data["plaintext"] == plaintext
-
-# print("Bob successfuly decrypted Alice's re-encrypted message!")
-# print("Original message: {}".format(data["plaintext"]))
