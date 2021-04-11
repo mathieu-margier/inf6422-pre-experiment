@@ -122,7 +122,7 @@ def send_message():
 
     data = request.get_json()
     
-    if "sender" in data and "link" in data and "capsule" in data:
+    if "sender" in data and "link" in data and "capsule" in data and "IsEncrypted" in data:
         try:
             print("Ajout du message")
             start = time.perf_counter()
@@ -131,7 +131,7 @@ def send_message():
 
             global message_counter
             message_counter += 1
-            database.add_message(c, message_counter, data["sender"], data["link"], True, data["capsule"])
+            database.add_message(c, message_counter, data["sender"], data["link"], True, data["capsule"], data["IsEncrypted"])
             database.show_table(c, "message")
             conn.commit()
             conn.close()
@@ -146,7 +146,35 @@ def send_message():
     abort(400)
 
 @api.route("socialnetwork/getcontent", methods=["POST"])
-def get_content(): 
+def get_content():
+    print("recuperation contenu niveau api")
+    if request.content_type.lower() != "application/json":
+        abort(415)
+
+    data = request.get_json()
+
+    if "username" in data and "IsEncrypted" in data:
+        try:
+            start = time.perf_counter()
+            conn = sqlite3.connect('social_network.db')
+            c = conn.cursor()
+            if data["IsEncrypted"]:
+                contents = database.get_content(c, data["username"])
+            else:
+                contents = database.get_content_unencrypted(c)
+            print(contents)
+            conn.close()
+            end = time.perf_counter()
+            time_stats_endpoints["getpublickey"].append(end - start)
+            return {"status": "ok", "contents": contents}
+        except Exception as e:
+            print(e)
+            return {"status": "error", "error": str(e)}
+
+    abort(400)
+
+@api.route("socialnetwork/getowncontent", methods=["POST"])
+def get_own_content():
     if request.content_type.lower() != "application/json":
         abort(415)
 
@@ -157,7 +185,7 @@ def get_content():
             start = time.perf_counter()
             conn = sqlite3.connect('social_network.db')
             c = conn.cursor()
-            contents = database.get_content(c, data["username"])
+            contents = database.get_own_content(c, data["username"])
             print(contents)
             conn.close()
             end = time.perf_counter()
@@ -292,7 +320,7 @@ def gen_rencryption_key():
 
     abort(400)
 
-@api.route("/decrypt", methods=["POST"])
+@api.route("/client/decrypt", methods=["POST"])
 def decrypt():
     if request.content_type.lower() != "application/json":
         abort(415)

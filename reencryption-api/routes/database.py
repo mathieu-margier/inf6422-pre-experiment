@@ -1,11 +1,14 @@
 # Fonctions pour la db
+import sqlite3
+
+
 def add_user(c, name, private_key, public_key, signing_key, verifying_key):
     query = "insert into users (FirstName,Public_key,Private_key,Verifying_key,Signing_key) values (?, ?, ?, ?, ?)"
     c.execute(query, (name, public_key, private_key, verifying_key, signing_key))
 
-def add_message(c, number, sender, link, is_message, capsule):
-    query = "insert into message (Number, Sender, Link, IsMessage, Capsule) values (?, ?, ?, ?, ?)"
-    c.execute(query, (number, sender, link, is_message, capsule))
+def add_message(c, number, sender, link, is_message, capsule, is_encrypted):
+    query = "insert into message (Number, Sender, Link, IsMessage, Capsule, IsEncrypted) values (?, ?, ?, ?, ?, ?)"
+    c.execute(query, (number, sender, link, is_message, capsule, is_encrypted))
 
 def add_reenc_key(c, message_number, receiver, reenc_key):
     query = "insert into proxy (MessageNumber, Receiver, ReencKey) values (?, ?, ?)"
@@ -32,14 +35,27 @@ def get_content(c, username):
     c.execute(query, (username,))
     return c.fetchall()
 
+def get_content_unencrypted(c):
+    query = "select * from message where IsEncrypted is FALSE "
+    c.execute(query,)
+    return c.fetchall()
+
+def get_own_content(c, username):
+    query = "select * from message where Sender = ?"
+    c.execute(query, (username,))
+    return c.fetchall()
+
     ##INITIALISATION DES TABLES
 
 
 def initialisation_data_base(c):
     ## Dropping Tables
-    c.execute("""DROP TABLE users""")
-    c.execute("""DROP TABLE message""")
-    c.execute("""DROP TABLE proxy""")
+    try :
+        c.execute("""DROP TABLE users""")
+        c.execute("""DROP TABLE message""")
+        c.execute("""DROP TABLE proxy""")
+    except sqlite3.OperationalError:
+        pass
 
     ## Creating Tables
     c.execute("""CREATE TABLE users (
@@ -54,7 +70,8 @@ def initialisation_data_base(c):
         Sender varchar(255),
         Link varchar (255),
         IsMessage boolean,
-        Capsule varchar (255))""")
+        Capsule varchar (255),
+        IsEncrypted boolean)""")
 
     c.execute("""CREATE TABLE proxy (
         MessageNumber int,

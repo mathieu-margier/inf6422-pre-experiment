@@ -82,7 +82,7 @@ def envoiContenuIndividuel():
 	# Envoi du message chiffré et de la capsule
 	response = requests.post(
 		URL + "socialnetwork/sendmessage",
-		json={"sender": username, "link": ciphertext, "capsule": capsule}
+		json={"sender": username, "link": ciphertext, "capsule": capsule, "IsEncrypted": True}
 	)
 	assert response.status_code == 200
 	data = response.json()
@@ -123,6 +123,80 @@ def envoiContenuIndividuel():
 
 def envoiContenuCollectif():
 	print("envoi de message collectif")
+	recievers=[]
+	number_reviever = int(input('A combien de personnes voulez vous envoyer ce message\nNombre : '))
+	for i in range(number_reviever):
+
+		# Choix du destinataire
+		choixEnvoi = input('A qui voulez-vous envoyer ce message\nChoix : ')
+		response = requests.post(
+			URL + "socialnetwork/checkuserexistence",
+			json={"usernames": [choixEnvoi]}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if (data["status"] != "ok"):
+			print(data["error"])
+			return False
+		recievers.append(choixEnvoi)
+
+	# Message et chiffrement
+	message = input('Veuillez entrer votre message\nMessage : ')
+	response = requests.post(
+		URL + "client/encrypt",
+		json={"publicKey": public_key, "plaintext": message}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if (data["status"] != "ok"):
+		print(data["error"])
+		return False
+	ciphertext = data["ciphertext"]
+	capsule = data["capsule"]
+	print("ciphertext: {}".format(ciphertext))
+	print("alice's encrypted message: {}".format(capsule))
+
+	# Envoi du message chiffré et de la capsule
+	response = requests.post(
+		URL + "socialnetwork/sendmessage",
+		json={"sender": username, "link": ciphertext, "capsule": capsule, "IsEncrypted": True}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if (data["status"] != "ok"):
+		print(data["error"])
+		return False
+	message_number = data["messageNumber"]
+
+	# Récupération clé publique du destinataire
+	for person in recievers:
+		response = requests.post(
+			URL + "socialnetwork/getpublickeys",
+			json={"username": person}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if (data["status"] != "ok"):
+			print(data["error"])
+			return False
+		receiver_public_key = data["publicKey"]
+
+	# Génération de la re-encryption key
+		response = requests.post(
+			URL + "client/gen_renc_key",
+			json={"delegatorPrivateKey": private_key,
+				  "delegatorSigningKey": signing_key,
+				  "receiverPublicKey": receiver_public_key,
+				  "receiverUsername": person,
+				  "messageNumber": message_number}
+		)
+		assert response.status_code == 200
+		data = response.json()
+		if (data["status"] != "ok"):
+			print(data["error"])
+			return False
+		print("Re-encryption key from "+ username +" to "+ person + " generated")
+
 	return True
 
 def receptionContenu():
@@ -130,7 +204,7 @@ def receptionContenu():
 	# Récupération du contenu de Bob
 	response = requests.post(
 		URL + "socialnetwork/getcontent",
-		json={"username": username}
+		json={"username": username, "IsEncrypted" : True}
 	)
 	assert response.status_code == 200
 	data = response.json()
@@ -199,9 +273,94 @@ def receptionContenu():
 		if(data["status"] != "ok"):
 			print(data["error"])
 			return False
+		print("from : " + message_sender)
 		print("plaintext : ")
 		print(data["plaintext"])
 		print("Bob successfuly decrypted Alice's re-encrypted message!")
+
+def boiteEnvoie():
+	print("réception de contenu")
+	# Récupération du contenu de Bob
+	response = requests.post(
+		URL + "socialnetwork/getowncontent",
+		json={"username": username}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if (data["status"] != "ok"):
+		print(data["error"])
+		return False
+
+	messages = data["contents"]
+
+	# Re-encryption des messages
+	for message in messages:
+		message_number = message[0]
+		message_content = message[2]
+		message_capsule = message[4]
+
+		# Déchiffrement du receveur
+		response = requests.post(
+			URL + "client/decrypt",
+			json={"receiverPrivateKey": private_key, "ciphertext": message_content, "capsule": message_capsule}
+		)
+		# print("Request: {}".format(response.text))
+		assert response.status_code == 200
+		data = response.json()
+		if (data["status"] != "ok"):
+			print(data["error"])
+			return False
+		print("message numéro : " + str(message_number))
+		print("plaintext : ")
+		print(data["plaintext"])
+		print("Bob successfuly decrypted Alice's re-encrypted message!")
+
+def envoieSansEncryption():
+	print("envoi de message individuel")
+
+	# Message et chiffrement
+	message = input('Veuillez entrer votre message\nMessage : ')
+
+	# Envoi du message chiffré et de la capsule
+	response = requests.post(
+		URL + "socialnetwork/sendmessage",
+		json={"sender": username, "link": message, "capsule": message, "IsEncrypted": False}
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if (data["status"] != "ok"):
+		print(data["error"])
+		return False
+
+	return True
+
+def receptionSansEncryption():
+	print("réception de contenu")
+	# Récupération du contenu de Bob
+	response = requests.post(
+		URL + "socialnetwork/getcontent",
+		json={"username": username, "IsEncrypted": False},
+	)
+	assert response.status_code == 200
+	data = response.json()
+	if (data["status"] != "ok"):
+		print(data["error"])
+		return False
+
+	messages = data["contents"]
+
+	# Re-encryption des messages
+	for message in messages:
+		message_number = message[0]
+		message_sender = message[1]
+		message_content = message[2]
+
+		print("de : " + message_sender)
+		print("numero : " + str(message_number))
+		print("message non chiffré : ")
+		print(message_content)
+
+	return True
 
 # Connexion ou inscription
 choice = 0
@@ -215,9 +374,9 @@ while(choice != '1' or not validation):
 	if(choice == '2'):
 		validation = inscription()
 		
-# Menu utilisateur connecté		
-while(choice != '4'):
-	choice = input('1 - Partager du contenu à une personne\n2 - Partager du contenu à un groupe\n3 - Recevoir le contenu qui m\'est destiné\n4 - Quitter\nChoix : ')
+# Menu utilisateur connecté
+while(choice != '7'):
+	choice = input('1 - Partager du contenu à une personne\n2 - Partager du contenu à un groupe\n3 - Recevoir le contenu qui m\'est destiné\n4 - Voir mes messages envoyés\n5 - Partager du contenu non chiffré à une personne\n6 - Recevoir du contenu non chiffré\n7 - Quitter\nChoix : ')
 
 	if(choice == '1'):
 		validation = envoiContenuIndividuel()
@@ -225,6 +384,12 @@ while(choice != '4'):
 		validation = envoiContenuCollectif()
 	if(choice == '3'):
 		validation = receptionContenu()
+	if (choice == '4'):
+		validation = boiteEnvoie()
+	if (choice == '5'):
+		validation = envoieSansEncryption()
+	if (choice == '6'):
+		validation = receptionSansEncryption()
 
 
 # ## Signing / verifying keypair
