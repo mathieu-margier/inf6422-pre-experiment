@@ -2,9 +2,11 @@ import time
 import random
 import statistics
 import sqlite3
+import base64
 from . import database
 from flask import Flask, Blueprint, request, abort, json
 from umbral import pre, keys, config, signing, kfrags, cfrags
+from cryptography.fernet import Fernet
 
 api = Blueprint('api', __name__)
 
@@ -23,7 +25,9 @@ time_stats_endpoints = {
     "decrypt": [],
     "decrypt_reenc": [],
     "send_message": [],
-    "get_content": []
+    "get_content": [],
+    "encrypt_file": [],
+    "decrypt_file": []
 }
 
 # Counter to find messages
@@ -358,6 +362,59 @@ def decrypt_reenc():
     abort(400)
 
 
+@api.route("client/encrypt_file", methods=["POST"])
+def encrypt_file():
+    if request.content_type.lower() != "application/json":
+        abort(415)
+
+    data = request.get_json()
+
+    if "content" in data:
+        try:
+            start = time.perf_counter()
+            # Generate symmetrick key
+            key = Fernet.generate_key()
+            cipher_suite = Fernet(key)
+
+            # Encrypt the content
+            content = base64.b64decode(data["content"])
+            content_encrypted = cipher_suite.encrypt(content)
+            end = time.perf_counter()
+
+            time_stats_endpoints["encrypt_file"].append(end - start)
+
+            return {"status": "ok", "key": key.hex(), "content": base64.b64encode(content_encrypted).decode('ascii')}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    abort(400)
+
+@api.route("client/decrypt_file", methods=["POST"])
+def decrypt_file():
+    if request.content_type.lower() != "application/json":
+        abort(415)
+
+    data = request.get_json()
+
+    if "key" in data and "content" in data:
+        try:
+            start = time.perf_counter()
+            # Retrieve symmetric key
+            key = bytes.fromhex(data["key"])
+            cipher_suite = Fernet(key)
+
+            # Decrypt content
+            content_encrypted = base64.b64decode(data["content"])
+            content = cipher_suite.decrypt(content_encrypted)
+            end = time.perf_counter()
+
+            time_stats_endpoints["decrypt_file"].append(end - start)
+
+            return {"status": "ok", "content": base64.b64encode(content).decode('ascii')}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    abort(400)
 
 # Proxy re-encryption endpoints (réalisés par le proxy)
 @api.route("proxy/re_encrypt", methods=["POST"])
