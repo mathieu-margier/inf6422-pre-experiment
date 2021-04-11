@@ -2,16 +2,22 @@
 import sqlite3
 
 
-def add_user(c, name, private_key, public_key):
-    query = "insert into users (FirstName,Public_key,Private_key) values (?, ?, ?)"
-    c.execute(query, (name, public_key, private_key))
+def add_user(c, name, private_key, public_key, signing_key, verifying_key):
+    query = "insert into users (FirstName,Public_key,Private_key,Verifying_key,Signing_key) values (?, ?, ?, ?, ?)"
+    c.execute(query, (name, public_key, private_key, verifying_key, signing_key))
 
+def add_message(c, number, sender, link, capsule, is_encrypted):
+    query = "insert into message (Number, Sender, Link, IsMessage, Capsule, IsEncrypted) values (?, ?, ?, ?, ?, ?)"
+    c.execute(query, (number, sender, link, True, capsule, is_encrypted))
 
-def add_message(c, sender, reciever, link, is_message):
-    query = """insert into message values (\'""" + sender + """\',\'""" + reciever + """\',\'""" + link + """\',""" + str(
-        is_message) + """) """
-    c.execute(query)
+def add_file(c, number, sender, link, key, capsule):
+    # TODO Handle not encrypted files
+    query = "insert into message (Number, Sender, Link, IsMessage, LinkKey, Capsule, IsEncrypted) values (?, ?, ?, ?, ?, ?, ?)"
+    c.execute(query, (number, sender, link, False, key, capsule, True))
 
+def add_reenc_key(c, message_number, receiver, reenc_key):
+    query = "insert into proxy (MessageNumber, Receiver, ReencKey) values (?, ?, ?)"
+    c.execute(query, (message_number, receiver, reenc_key))
 
 def show_table(c, table):
     query = """select * from """ + table
@@ -21,46 +27,61 @@ def show_table(c, table):
 
 def show_element(c, table, colomn, condition):
     query = """select * from """ + table + """ where """ + colomn + """=\'""" + condition +"""\' """
-    print(query)
     c.execute(query)
     return c.fetchone()
+
+def get_proxy_line(c, message_number, receiver):
+    query = "select * from proxy where MessageNumber = ? and Receiver = ?"
+    c.execute(query, (message_number, receiver))
+    return c.fetchone()
+
+def get_content(c, username):
+    query = "select Number, Sender, Link, Capsule, IsEncrypted from message where Number IN (select MessageNumber from proxy where Receiver = ?) AND message.IsMessage = True"
+    c.execute(query, (username,))
+    return c.fetchall()
+
+def get_file(c, username):
+    query = "select Number, Sender, Link, LinkKey, Capsule from message where Number IN (select MessageNumber from proxy where Receiver = ?) AND message.IsMessage = False"
+    c.execute(query, (username,))
+    return c.fetchall()
+
+def get_content_unencrypted(c):
+    query = "select * from message where IsEncrypted is FALSE "
+    c.execute(query,)
+    return c.fetchall()
+
+def get_own_content(c, username):
+    query = "select Number, Sender, Link, Capsule, IsEncrypted from message where Sender = ? AND message.IsMessage = True"
+    c.execute(query, (username,))
+    return c.fetchall()
 
     ##INITIALISATION DES TABLES
 
 
 def initialisation_data_base(c):
     ## Dropping Tables
-    try:
-        c.execute("""DROP TABLE users""")
-        c.execute("""DROP TABLE message""")
-    except sqlite3.OperationalError:
-        pass
+    c.execute("""DROP TABLE IF EXISTS users""")
+    c.execute("""DROP TABLE IF EXISTS message""")
+    c.execute("""DROP TABLE IF EXISTS proxy""")
 
     ## Creating Tables
     c.execute("""CREATE TABLE users (
-        FirstName varchar(255),
-        Public_key varchar (255),
-        Private_key varchar (255))""")
+        FirstName varchar(255) NOT NULL,
+        Public_key varchar (255) NOT NULL,
+        Private_key varchar (255) NOT NULL,
+        Verifying_key varchar (255) NOT NULL,
+        Signing_key varchar (255) NOT NULL)""")
 
     c.execute("""CREATE TABLE message (
-        Sender varchar(255),
-        Reciever varchar (255),
-        Link varchar (255),
-        IsMessage boolean)""")
+        Number int NOT NULL,
+        Sender varchar(255) NOT NULL,
+        Link varchar (255) NOT NULL,
+        IsMessage boolean NOT NULL,
+        LinkKey varchar (255),
+        Capsule varchar (255) NOT NULL,
+        IsEncrypted boolean NOT NULL)""")
 
-
-def message_recieved(c, person):
-    args = (person,)
-    query = """select * from message where Reciever = ? and IsMessage = True"""
-    c.execute(query, args)
-    print(c.fetchall())
-
-
-def message_sent(c, person):
-    args = (person,)
-    query = """select * from message where Sender = ? and IsMessage = True"""
-    c.execute(query, args)
-    print(c.fetchall())
-
-
-
+    c.execute("""CREATE TABLE proxy (
+        MessageNumber int NOT NULL,
+        Receiver varchar(255) NOT NULL,
+        ReencKey varchar (255) NOT NULL )""")
