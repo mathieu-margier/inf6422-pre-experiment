@@ -392,12 +392,12 @@ def gen_rencryption_key():
                                          receiving_pubkey=receiverPublicKey,
                                          threshold=1,
                                          N=1)
+            end = time.perf_counter()
             conn = sqlite3.connect('social_network.db')
             c = conn.cursor()
             database.add_reenc_key(c, data["messageNumber"], data["receiverUsername"], kfrag.to_bytes().hex())
             conn.commit()
             conn.close()
-            end = time.perf_counter()
 
             time_stats_endpoints["gen_renc_key"].append(end - start)
             return {"status": "ok"}
@@ -540,12 +540,12 @@ def re_encrypt():
         and "receiverPublicKey" in data and "capsule" in data
         and "messageNumber" in data and "receiver" in data):
         try:
-            start = time.perf_counter()
             # Récupération de la clé de ré-encryption
             conn = sqlite3.connect('social_network.db')
             c = conn.cursor()
             reenc_key_line = database.get_proxy_line(c, data["messageNumber"], data["receiver"])
             conn.close()
+            start = time.perf_counter()
             delegatorPubKey = keys.UmbralPublicKey.from_hex(data["delegatorPublicKey"])
             delegatorVerifKey = keys.UmbralPublicKey.from_hex(data["delegatorVerifyingKey"])
             receiverPublicKey = keys.UmbralPublicKey.from_hex(data["receiverPublicKey"])
